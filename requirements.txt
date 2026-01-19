@@ -1,0 +1,11 @@
+ultralytics
+opencv-python
+numpy
+pandas
+streamlit
+sqlalchemy
+pillow
+scikit-learn
+easyocr
+plotly
+pytest

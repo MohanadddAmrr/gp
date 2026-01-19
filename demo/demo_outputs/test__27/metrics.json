@@ -1,0 +1,124 @@
+{
+  "frame": 750,
+  "fps": 25.0,
+  "num_players": 23,
+  "avg_step_px": 1.5131128227099306,
+  "ball_detected": false,
+  "tracks": [
+    {
+      "id": 14,
+      "total_distance_px": 1055.4435662869764,
+      "last_step_px": 0.09488578078745594
+    },
+    {
+      "id": 20,
+      "total_distance_px": 1317.997320772029,
+      "last_step_px": 0.19944445596062968
+    },
+    {
+      "id": 75,
+      "total_distance_px": 1134.4931934121491,
+      "last_step_px": 1.5063229576602348
+    },
+    {
+      "id": 83,
+      "total_distance_px": 1607.1647863492806,
+      "last_step_px": 4.073576156910659
+    },
+    {
+      "id": 127,
+      "total_distance_px": 669.6453939700813,
+      "last_step_px": 0.16495531259549415
+    },
+    {
+      "id": 187,
+      "total_distance_px": 716.4032201272312,
+      "last_step_px": 2.0556947839484576
+    },
+    {
+      "id": 190,
+      "total_distance_px": 661.6449989080891,
+      "last_step_px": 1.643829485925909
+    },
+    {
+      "id": 207,
+      "total_distance_px": 490.8418749717103,
+      "last_step_px": 2.7581666919558656
+    },
+    {
+      "id": 208,
+      "total_distance_px": 478.91889181787093,
+      "last_step_px": 2.2890557016529676
+    },
+    {
+      "id": 210,
+      "total_distance_px": 397.036016160606,
+      "last_step_px": 2.0808649356997613
+    },
+    {
+      "id": 213,
+      "total_distance_px": 274.9373817623288,
+      "last_step_px": 1.3928084492311572
+    },
+    {
+      "id": 214,
+      "total_distance_px": 375.51454166050127,
+      "last_step_px": 1.9476863766179087
+    },
+    {
+      "id": 217,
+      "total_distance_px": 156.65191457166952,
+      "last_step_px": 0.32772562091798824
+    },
+    {
+      "id": 231,
+      "total_distance_px": 229.53625457578553,
+      "last_step_px": 2.912047956583023
+    },
+    {
+      "id": 235,
+      "total_distance_px": 51.94494519095985,
+      "last_step_px": 0.17338402681995901
+    },
+    {
+      "id": 239,
+      "total_distance_px": 141.42390851749326,
+      "last_step_px": 0.19740061343166826
+    },
+    {
+      "id": 241,
+      "total_distance_px": 98.78808190078875,
+      "last_step_px": 1.9529716684831941
+    },
+    {
+      "id": 244,
+      "total_distance_px": 24.30425050556805,
+      "last_step_px": 0.20975465843545626
+    },
+    {
+      "id": 245,
+      "total_distance_px": 39.32673518201991,
+      "last_step_px": 0.5788980620174539
+    },
+    {
+      "id": 246,
+      "total_distance_px": 103.46911194086375,
+      "last_step_px": 2.2348008784178335
+    },
+    {
+      "id": 247,
+      "total_distance_px": 64.81562530288842,
+      "last_step_px": 1.4102520322367882
+    },
+    {
+      "id": 249,
+      "total_distance_px": 36.39962116453687,
+      "last_step_px": 1.0500651094211684
+    },
+    {
+      "id": 251,
+      "total_distance_px": 45.276754585729236,
+      "last_step_px": 3.547003206617372
+    }
+  ]
+}
