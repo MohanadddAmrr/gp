@@ -1,9 +1,18 @@
 import json
+import sys
 from pathlib import Path
+
+# FIX: Add project root to Python path
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from services.ball_tracker import BallTracker
+from services.possession_tracker import PossessionTracker
+from services.ball_detector import ColorBallDetector
+
 
 # ============================================================
 # PATHS & MODEL
@@ -68,13 +77,28 @@ def process_video(video_path: Path, model: YOLO):
     ball_seen = False
 
     # --------------------------------------------------------
+    # TRACKERS + DETECTORS INITIALIZATION (ENHANCED)
+    # --------------------------------------------------------
+    ball_tracker = BallTracker(max_history=30, velocity_window=3)
+    possession_tracker = PossessionTracker(distance_threshold=50.0)
+    color_ball_detector = ColorBallDetector()  # Hybrid: fallback detector
+    ball_position_history = []
+    heat_ball = np.zeros((height, width), dtype=np.float32)
+    
+    # Track detection method statistics
+    yolo_detections = 0
+    color_detections = 0
+    predicted_detections = 0
+
+    # --------------------------------------------------------
     # YOLO TRACKING: PLAYERS + BALL
     # --------------------------------------------------------
     results = model.track(
         source=str(video_path),
         stream=True,
-        show=False,                 # we draw ourselves
+        show=False,
         classes=[PERSON_CLASS, BALL_CLASS],
+        conf=0.05,  # LOW CONFIDENCE FOR BALL DETECTION
         verbose=False,
         persist=True,
     )
@@ -125,46 +149,168 @@ def process_video(video_path: Path, model: YOLO):
                 heat_per_player[tid] = np.zeros_like(heat_global)
             heat_per_player[tid][iy, ix] += 1.0
 
+        # --------- ENHANCED BALL DETECTION: YOLO + Color + Prediction ----------
+        ball_detected_this_frame = False
+        ball_box = None
+        detection_method = None
+
+        # STEP 1: Try YOLO ball detection first (fast, accurate when visible)
+        for tid, box, cls_id in zip(ids, xyxy, cls_arr):
+            if cls_id == BALL_CLASS:
+                ball_detected_this_frame = True
+                ball_box = box
+                detection_method = "YOLO"
+                yolo_detections += 1
+                break
+
+        # STEP 2: If YOLO failed, try color-based detection (slower, works for small balls)
+        if not ball_detected_this_frame:
+            color_result = color_ball_detector.detect_best(frame)
+            if color_result is not None:
+                ball_box = color_result
+                ball_detected_this_frame = True
+                detection_method = "Color"
+                color_detections += 1
+
+        # STEP 3: Use trajectory prediction to fill gaps
+        tracked, method = ball_tracker.update_with_prediction(
+            ball_box, frame_idx, t, width, height, max_missing_frames=5
+        )
+        
+        if tracked:
+            if method == "predicted":
+                predicted_detections += 1
+                detection_method = "Predicted"
+            
+            ball_seen = True
+            ball_position = ball_tracker.get_position()
+            
+            if ball_position:
+                vel = ball_tracker.get_velocity()
+                
+                # Store position history
+                ball_position_history.append({
+                    'frame': frame_idx,
+                    'x': float(ball_position[0]),
+                    'y': float(ball_position[1]),
+                    'timestamp': float(t),
+                    'velocity': float(vel),
+                    'detection_method': detection_method
+                })
+                
+                # Update ball heatmap
+                ix, iy = int(ball_position[0]), int(ball_position[1])
+                if 0 <= ix < width and 0 <= iy < height:
+                    heat_ball[iy, ix] += 1.0
+                
+                # --------- ENHANCED POSSESSION DETECTION WITH CONTEXT ----------
+                # Build player_positions dict: {player_id: (x, y, team)}
+                player_positions = {}
+                for pid, pbox, pcls in zip(ids, xyxy, cls_arr):
+                    if pcls != PERSON_CLASS:
+                        continue
+                    px = (pbox[0] + pbox[2]) / 2.0
+                    py = (pbox[1] + pbox[3]) / 2.0
+                    # Determine team (left=A, right=B)
+                    team = 'A' if px < width / 2.0 else 'B'
+                    player_positions[int(pid)] = (float(px), float(py), team)
+                
+                # Detect possession with tactical context
+                possession_context = possession_tracker.detect_possession_with_context(
+                    ball_pos=ball_position,
+                    player_positions=player_positions,
+                    frame_idx=frame_idx,
+                    timestamp=t,
+                    frame_width=width,
+                    frame_height=height
+                )
+
         # --------- DRAW PLAYERS + BALL ----------
-        # players: green boxes with P{id}
+        # Get current possessor for highlighting
+        current_possessor = possession_tracker.get_current_possessor()
+        
+        # Draw players: green boxes with P{id}, highlight possessor in cyan
         for tid, box, cls_id in zip(ids, xyxy, cls_arr):
             x1, y1, x2, y2 = map(int, box)
 
             if cls_id == PERSON_CLASS:
                 label = f"P{tid}"
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Highlight current possessor
+                if current_possessor == tid:
+                    color = (255, 255, 0)  # Cyan for possessor
+                    label += " [POSS]"
+                else:
+                    color = (0, 255, 0)  # Green for others
+                
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 cv2.putText(
                     frame,
                     label,
                     (x1, max(y1 - 5, 15)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.6,
-                    (0, 255, 0),
+                    color,
                     2,
                 )
-            elif cls_id == BALL_CLASS:
-                # Draw ball in yellow
-                ball_seen = True
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        
+        # Draw ball if tracked
+                # Draw ball if tracked
+        if tracked:
+            ball_bbox = ball_tracker.get_bbox()
+            if ball_bbox is not None:  # <- FIXED
+
+                x1, y1, x2, y2 = map(int, ball_bbox)
+                vel = ball_tracker.get_velocity()
+                
+                # Color code by detection method
+                if detection_method == "YOLO":
+                    ball_color = (0, 255, 255)  # Yellow
+                elif detection_method == "Color":
+                    ball_color = (255, 0, 255)  # Magenta
+                else:  # Predicted
+                    ball_color = (0, 165, 255)  # Orange
+                
+                cv2.rectangle(frame, (x1, y1), (x2, y2), ball_color, 2)
+                vel_text = f"Ball {vel:.0f}px/s [{detection_method}]"
                 cv2.putText(
                     frame,
-                    "Ball",
+                    vel_text,
                     (x1, max(y1 - 5, 15)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 255, 255),
+                    0.5,
+                    ball_color,
                     2,
                 )
 
-        # status line
+        # --------- ENHANCED STATUS LINE WITH TACTICAL INFO ----------
         current_player_count = int((cls_arr == PERSON_CLASS).sum())
-        status_text = f"Frame: {frame_idx}   Players: {current_player_count}"
+        current_team = possession_tracker.get_current_team()
+        
+        # Get possession context
+        poss_text = "Loose ball"
+        if current_team:
+            poss_pct_A = possession_tracker.get_possession_percentage().get('A', 0)
+            poss_pct_B = possession_tracker.get_possession_percentage().get('B', 0)
+            
+            # Get pressure and zone if available
+            pressure_info = ""
+            zone_info = ""
+            if possession_context:
+                pressure = possession_context.get('pressure', 0)
+                zone = possession_context.get('zone', '')
+                pressure_info = f" | Press: {pressure}"
+                zone_info = f" | Zone: {zone}"
+            
+            poss_text = f"Team {current_team} ({poss_pct_A:.0f}%-{poss_pct_B:.0f}%){pressure_info}{zone_info}"
+        
+        status_text = f"Frame: {frame_idx}   Players: {current_player_count}   Possession: {poss_text}"
         cv2.putText(
             frame,
             status_text,
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
+            0.6,
             (255, 255, 255),
             2,
         )
@@ -218,6 +364,7 @@ def process_video(video_path: Path, model: YOLO):
     make_colored_heatmap(heat_global, out_dir / "heatmap_global.png")
     make_colored_heatmap(heat_team_A, out_dir / "heatmap_team_A.png")
     make_colored_heatmap(heat_team_B, out_dir / "heatmap_team_B.png")
+    make_colored_heatmap(heat_ball, out_dir / "heatmap_ball.png")
     for pid, hm in heat_per_player.items():
         make_colored_heatmap(hm, out_dir / f"heatmap_player_{pid}.png")
 
@@ -305,11 +452,46 @@ def process_video(video_path: Path, model: YOLO):
 
     avg_step_px = float(np.mean(all_step_lengths)) if all_step_lengths else 0.0
 
+    # ============================================================
+    # ENHANCED METRICS WITH ALL NEW FEATURES
+    # ============================================================
+    ball_velocities = [p['velocity'] for p in ball_position_history if 'velocity' in p]
+    
+    # Get possession statistics (now includes zones, pressure, duration)
+    possession_stats = possession_tracker.get_statistics()
+    possession_percentage = possession_tracker.get_possession_percentage()
+    player_possession_stats = possession_tracker.get_player_possession_stats()
+    possession_history = possession_tracker.get_possession_history()
+    
     metrics = {
         "frame": frame_idx,
         "num_players": len(track_history),
         "avg_step_px": avg_step_px,
         "ball_detected": bool(ball_seen),
+        "ball_tracking": {
+            "total_detections": len(ball_position_history),
+            "detection_rate": len(ball_position_history) / frame_idx if frame_idx > 0 else 0,
+            "avg_velocity_px_s": float(np.mean(ball_velocities)) if ball_velocities else 0.0,
+            "max_velocity_px_s": float(np.max(ball_velocities)) if ball_velocities else 0.0,
+            "yolo_detections": yolo_detections,
+            "color_detections": color_detections,
+            "predicted_detections": predicted_detections,
+            "position_history": ball_position_history
+        },
+        "possession": {
+            "team_possession_percentage": possession_percentage,
+            "player_stats": {
+                str(k): v for k, v in player_possession_stats.items()
+            },
+            "possession_history": possession_history,
+            "total_possession_changes": len(possession_history),
+            "possession_rate": possession_stats.get('possession_rate', 0.0),
+            # NEW: Enhanced tactical metrics
+            "zone_stats": possession_stats.get('zone_stats', {}),
+            "pressure_stats": possession_stats.get('pressure_stats', {}),
+            "duration_stats": possession_stats.get('duration_stats', {}),
+            "zone_changes": possession_stats.get('zone_changes', 0)
+        },
         "tracks": tracks_list,
     }
 
@@ -317,6 +499,15 @@ def process_video(video_path: Path, model: YOLO):
         json.dump(metrics, f, indent=2)
 
     print(f"  Saved metrics.json and heatmaps to: {out_dir}")
+    print(f"  Ball detections: {len(ball_position_history)}/{frame_idx} frames ({len(ball_position_history)/frame_idx*100:.1f}%)")
+    print(f"    - YOLO: {yolo_detections}, Color: {color_detections}, Predicted: {predicted_detections}")
+    print(f"  Possession - Team A: {possession_percentage['A']:.1f}%, Team B: {possession_percentage['B']:.1f}%")
+    print(f"  Possession changes: {len(possession_history)}")
+    
+    # NEW: Print tactical insights
+    duration_stats = possession_stats.get('duration_stats', {})
+    if duration_stats.get('total_possessions', 0) > 0:
+        print(f"  Possession style - Short: {duration_stats.get('short_pct', 0):.0f}%, Medium: {duration_stats.get('medium_pct', 0):.0f}%, Long: {duration_stats.get('long_pct', 0):.0f}%")
 
 
 def main():
