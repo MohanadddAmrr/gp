@@ -6,6 +6,7 @@ Professional dashboard for coaches with FULL tactical insights:
 - Player performance metrics
 - Ball tracking with prediction stats
 - Possession analytics with zones, pressure, duration
+- Pass detection and passing networks
 - Tactical insights and recommendations
 """
 
@@ -101,6 +102,57 @@ def format_time(seconds):
     return f"{mins}:{secs:02d}"
 
 
+def build_pass_events_df(metrics):
+    """Build DataFrame from pass events."""
+    pass_events = metrics.get("pass_events", [])
+    if not pass_events:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(pass_events)
+    if df.empty:
+        return df
+    
+    # Select and rename columns for display
+    display_cols = ['timestamp', 'passer_id', 'receiver_id', 'passer_team', 
+                    'outcome', 'distance_m', 'direction', 'velocity_mps']
+    available_cols = [c for c in display_cols if c in df.columns]
+    df = df[available_cols]
+    
+    # Round numeric columns
+    if 'distance_m' in df.columns:
+        df['distance_m'] = df['distance_m'].round(1)
+    if 'velocity_mps' in df.columns:
+        df['velocity_mps'] = df['velocity_mps'].round(1)
+    if 'timestamp' in df.columns:
+        df['timestamp'] = df['timestamp'].round(1)
+    
+    return df
+
+
+def build_player_passing_df(metrics):
+    """Build DataFrame for player passing stats."""
+    pass_stats = metrics.get("pass_detection", {})
+    player_passes = pass_stats.get("player_passes", {})
+    
+    if not player_passes:
+        return pd.DataFrame()
+    
+    rows = []
+    for pid, stats in player_passes.items():
+        rows.append({
+            'player_id': int(pid),
+            'attempted': stats.get('attempted', 0),
+            'completed': stats.get('completed', 0),
+            'accuracy': stats.get('accuracy', 0.0)
+        })
+    
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values('attempted', ascending=False)
+    
+    return df
+
+
 # ============================================================
 # MAIN APP
 # ============================================================
@@ -134,17 +186,19 @@ if not metrics:
 # Extract key data
 ball_tracking = metrics.get("ball_tracking", {})
 possession_data = metrics.get("possession", {})
+pass_detection = metrics.get("pass_detection", {})
 ball_detected = ball_tracking.get("total_detections", 0) > 0
 detection_rate = ball_tracking.get("detection_rate", 0) * 100
 
 # ============================================================
 # TABS
 # ============================================================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🔥 Team Heatmaps",
     "👤 Player Analysis",
     "⚽ Ball Analytics",
     "🎯 Possession Analytics",
+    "🎯 Pass Analytics",
     "📈 Statistics",
     "🏃 Movement Metrics"
 ])
@@ -158,28 +212,28 @@ with tab1:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.subheader("🌍 Global Heatmap")
+        st.subheader("Global (All Players)")
         img_global = load_pil_image(video_dir / "heatmap_global.png")
         if img_global:
             st.image(img_global, use_container_width=True)
         else:
-            st.warning("Heatmap not found")
+            st.info("Heatmap not yet generated")
     
     with col2:
-        st.subheader("🔵 Team A")
+        st.subheader("Team A (Left Side)")
         img_a = load_pil_image(video_dir / "heatmap_team_A.png")
         if img_a:
             st.image(img_a, use_container_width=True)
         else:
-            st.warning("Team A heatmap not found")
+            st.info("Heatmap not yet generated")
     
     with col3:
-        st.subheader("🔴 Team B")
+        st.subheader("Team B (Right Side)")
         img_b = load_pil_image(video_dir / "heatmap_team_B.png")
         if img_b:
             st.image(img_b, use_container_width=True)
         else:
-            st.warning("Team B heatmap not found")
+            st.info("Heatmap not yet generated")
 
 # ============================================================
 # TAB 2: PLAYER ANALYSIS
@@ -190,58 +244,40 @@ with tab2:
     player_heatmaps = list_player_heatmaps(video_dir)
     
     if not player_heatmaps:
-        st.warning("No player heatmaps found")
+        st.warning("No player heatmaps available")
     else:
-        player_ids = sorted(player_heatmaps.keys())
-        
-        # Get player stats for filtering
         tracks_df = build_tracks_df(metrics)
         
-        if not tracks_df.empty:
-            # Filter options
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                selected_player = st.selectbox(
-                    "Select Player",
-                    player_ids,
-                    format_func=lambda x: f"Player {x}"
-                )
-            with col2:
-                team = tracks_df[tracks_df['player_id'] == selected_player]['team'].values
-                team_label = team[0] if len(team) > 0 else "Unknown"
-                st.metric("Team", team_label)
+        player_ids = sorted(player_heatmaps.keys())
+        selected_player = st.selectbox("Select Player", player_ids)
+        
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            st.subheader(f"Player {selected_player} Heatmap")
+            img = load_pil_image(player_heatmaps[selected_player])
+            if img:
+                st.image(img, use_container_width=True)
+        
+        with col2:
+            st.subheader(f"Player {selected_player} Performance")
             
-            # Display heatmap and stats side by side
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.subheader(f"🔥 Position Heatmap - Player {selected_player}")
-                img = load_pil_image(player_heatmaps[selected_player])
-                if img:
-                    st.image(img, use_container_width=True)
-            
-            with col2:
-                st.subheader("📊 Performance Stats")
-                player_data = tracks_df[tracks_df['player_id'] == selected_player]
+            if not tracks_df.empty and selected_player in tracks_df['player_id'].values:
+                player_row = tracks_df[tracks_df['player_id'] == selected_player].iloc[0]
                 
-                if not player_data.empty:
-                    row = player_data.iloc[0]
-                    
-                    st.metric("Total Distance", f"{row['total_distance_m']:.1f} m")
-                    st.metric("Avg Speed", f"{row['avg_speed_mps']:.2f} m/s")
-                    st.metric("Max Speed", f"{row['max_speed_mps']:.2f} m/s")
-                    st.metric("Workload Score", f"{row['workload_score']:.1f}")
-                    st.metric("Involvement Index", f"{row['involvement_index']:.2f}")
-                    
-                    # Possession stats if available
-                    poss_stats = possession_data.get('player_stats', {})
-                    if str(selected_player) in poss_stats:
-                        player_poss = poss_stats[str(selected_player)]
-                        st.markdown("---")
-                        st.markdown("**⚽ Possession Stats**")
-                        st.metric("Touches", int(player_poss.get('touch_count', 0)))
-                        st.metric("Possession Time", format_time(player_poss.get('total_time', 0)))
-                        st.metric("Avg Touch Duration", f"{player_poss.get('avg_possession_duration', 0):.2f}s")
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Team", player_row.get('team', 'N/A'))
+                m2.metric("Distance", f"{player_row.get('total_distance_m', 0):.0f}m")
+                m3.metric("Avg Speed", f"{player_row.get('avg_speed_mps', 0):.1f} m/s")
+                m4.metric("Max Speed", f"{player_row.get('max_speed_mps', 0):.1f} m/s")
+                
+                m5, m6, m7, m8 = st.columns(4)
+                m5.metric("Workload", f"{player_row.get('workload_score', 0):.0f}")
+                m6.metric("Attack Zone %", f"{player_row.get('attacking_third_ratio', 0)*100:.0f}%")
+                m7.metric("Central Attack %", f"{player_row.get('central_attacking_ratio', 0)*100:.0f}%")
+                m8.metric("Involvement", f"{player_row.get('involvement_index', 0):.2f}")
+            else:
+                st.info("No performance data for this player")
 
 # ============================================================
 # TAB 3: BALL ANALYTICS (ENHANCED)
@@ -249,64 +285,45 @@ with tab2:
 with tab3:
     st.header("⚽ Ball Tracking & Analytics")
     
-    if not ball_detected:
-        st.warning("⚠️ No ball detected in this video")
-        st.info("💡 Ball detection works best with:\n- Clear white/colored ball\n- Good lighting\n- Ball visible in frame\n- Hybrid detection enabled (YOLO + Color + Prediction)")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Detection Rate", f"{detection_rate:.1f}%")
+    col2.metric("Total Detections", ball_tracking.get("total_detections", 0))
+    col3.metric("Avg Velocity", f"{ball_tracking.get('avg_velocity_px_s', 0):.0f} px/s")
+    col4.metric("Max Velocity", f"{ball_tracking.get('max_velocity_px_s', 0):.0f} px/s")
+    
+    st.markdown("---")
+    
+    # Detection method breakdown
+    st.subheader("Detection Method Breakdown")
+    
+    yolo = ball_tracking.get("yolo_detections", 0)
+    color = ball_tracking.get("color_detections", 0)
+    predicted = ball_tracking.get("predicted_detections", 0)
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.metric("YOLO Detections", yolo, help="Direct neural network detection")
+        st.metric("Color Detections", color, help="HSV color-based fallback")
+        st.metric("Predicted", predicted, help="Trajectory prediction when detection fails")
+    
+    with col2:
+        if yolo + color + predicted > 0:
+            fig = px.pie(
+                values=[yolo, color, predicted],
+                names=['YOLO (Neural Net)', 'Color (HSV)', 'Predicted (Trajectory)'],
+                title="Detection Method Distribution",
+                color_discrete_sequence=['#4CAF50', '#FF9800', '#2196F3']
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Ball heatmap
+    st.subheader("Ball Position Heatmap")
+    ball_heatmap = load_pil_image(video_dir / "heatmap_ball.png")
+    if ball_heatmap:
+        st.image(ball_heatmap, use_container_width=True)
     else:
-        # Detection summary with prediction stats
-        yolo_count = ball_tracking.get('yolo_detections', 0)
-        color_count = ball_tracking.get('color_detections', 0)
-        predicted_count = ball_tracking.get('predicted_detections', 0)
-        total_detections = ball_tracking.get('total_detections', 0)
-        
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("Total Detections", f"{total_detections}/{metrics['frame']}")
-        with col2:
-            st.metric("Detection Rate", f"{detection_rate:.1f}%")
-        with col3:
-            st.metric("YOLO", yolo_count, help="Direct YOLO detections")
-        with col4:
-            st.metric("Color", color_count, help="Color-based fallback detections")
-        with col5:
-            st.metric("Predicted", predicted_count, help="Trajectory predictions (gap filling)")
-        
-        # Detection improvement insight
-        if predicted_count > 0:
-            improvement = (predicted_count / total_detections) * 100
-            st.success(f"✨ Trajectory prediction improved tracking by {improvement:.1f}% (filled {predicted_count} gaps)")
-        
-        # Ball heatmap
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.subheader("🔥 Ball Position Heatmap")
-            ball_heatmap = load_pil_image(video_dir / "heatmap_ball.png")
-            if ball_heatmap:
-                st.image(ball_heatmap, use_container_width=True)
-                st.caption("Shows where the ball spent most time during the match")
-            else:
-                st.warning("Ball heatmap not generated")
-        
-        with col2:
-            st.subheader("📊 Ball Movement Stats")
-            avg_vel = ball_tracking.get('avg_velocity_px_s', 0)
-            max_vel = ball_tracking.get('max_velocity_px_s', 0)
-            
-            st.metric("Avg Velocity", f"{avg_vel:.1f} px/s")
-            st.metric("Max Velocity", f"{max_vel:.1f} px/s")
-            
-            # Detection method breakdown
-            if yolo_count > 0 or color_count > 0 or predicted_count > 0:
-                st.markdown("---")
-                st.markdown("**Detection Methods**")
-                fig = go.Figure(data=[go.Pie(
-                    labels=['YOLO', 'Color', 'Predicted'],
-                    values=[yolo_count, color_count, predicted_count],
-                    marker=dict(colors=['#FFD700', '#FF00FF', '#FFA500'])
-                )])
-                fig.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
-                st.plotly_chart(fig, use_container_width=True)
+        st.info("Ball heatmap not available")
 
 # ============================================================
 # TAB 4: POSSESSION ANALYTICS (FULLY ENHANCED)
@@ -315,273 +332,298 @@ with tab4:
     st.header("🎯 Possession Analytics - Tactical Insights")
     st.markdown("**Understanding ball control, pressure, zones, and playing style**")
     
-    if not possession_data or possession_data.get('total_possession_changes', 0) == 0:
-        st.warning("⚠️ No possession data available")
-        st.info("Possession tracking requires:\n- Ball detection\n- Player tracking\n- Both must be active simultaneously")
+    # Team possession percentages
+    poss_pct = possession_data.get("team_possession_percentage", {"A": 0, "B": 0})
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Team A Possession", f"{poss_pct.get('A', 0):.1f}%")
+    col2.metric("Team B Possession", f"{poss_pct.get('B', 0):.1f}%")
+    col3.metric("Possession Changes", possession_data.get("total_possession_changes", 0))
+    
+    st.markdown("---")
+    
+    # Zone statistics
+    st.subheader("⚡ Possession by Zone")
+    zone_stats = possession_data.get("zone_stats", {})
+    
+    if zone_stats:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Team A Zones**")
+            zone_a = zone_stats.get("A", {})
+            for zone, pct in zone_a.items():
+                st.progress(pct / 100 if pct <= 100 else 1.0, text=f"{zone}: {pct:.1f}%")
+        
+        with col2:
+            st.markdown("**Team B Zones**")
+            zone_b = zone_stats.get("B", {})
+            for zone, pct in zone_b.items():
+                st.progress(pct / 100 if pct <= 100 else 1.0, text=f"{zone}: {pct:.1f}%")
     else:
-        # Key metrics row
-        team_poss = possession_data.get('team_possession_percentage', {})
-        poss_changes = possession_data.get('total_possession_changes', 0)
-        zone_changes = possession_data.get('zone_changes', 0)
-        
+        st.info("Zone statistics not available")
+    
+    st.markdown("---")
+    
+    # Pressure statistics
+    st.subheader("💪 Pressure Analysis")
+    pressure_stats = possession_data.get("pressure_stats", {})
+    
+    if pressure_stats:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("High Pressure Events", pressure_stats.get("total_high_pressure_events", 0))
+        col2.metric("Avg Pressure", f"{pressure_stats.get('avg_pressure_count', 0):.1f} opponents")
+        col3.metric("Max Pressure", f"{pressure_stats.get('max_pressure_count', 0)} opponents")
+    else:
+        st.info("Pressure statistics not available")
+    
+    st.markdown("---")
+    
+    # Duration statistics
+    st.subheader("⏱️ Possession Duration Analysis")
+    duration_stats = possession_data.get("duration_stats", {})
+    
+    if duration_stats and duration_stats.get("total_possessions", 0) > 0:
         col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Possessions", duration_stats.get("total_possessions", 0))
+        col2.metric("Avg Duration", f"{duration_stats.get('avg_duration', 0):.1f}s")
+        col3.metric("Max Duration", f"{duration_stats.get('max_duration', 0):.1f}s")
+        col4.metric("Zone Changes", possession_data.get("zone_changes", 0))
         
-        with col1:
-            st.metric("Team A Possession", f"{team_poss.get('A', 0):.1f}%", 
-                     delta=None if team_poss.get('A', 0) == 50 else f"{team_poss.get('A', 0) - 50:+.1f}%")
-        with col2:
-            st.metric("Team B Possession", f"{team_poss.get('B', 0):.1f}%",
-                     delta=None if team_poss.get('B', 0) == 50 else f"{team_poss.get('B', 0) - 50:+.1f}%")
-        with col3:
-            st.metric("Possession Changes", poss_changes)
-        with col4:
-            st.metric("Zone Changes", zone_changes, help="Transitions between defensive/midfield/attacking zones")
+        # Duration breakdown
+        st.markdown("**Possession Style Breakdown:**")
+        short_pct = duration_stats.get("short_pct", 0)
+        medium_pct = duration_stats.get("medium_pct", 0)
+        long_pct = duration_stats.get("long_pct", 0)
         
-        st.markdown("---")
+        fig = px.pie(
+            values=[short_pct, medium_pct, long_pct],
+            names=['Short (<2s)', 'Medium (2-5s)', 'Long (>5s)'],
+            title="Possession Duration Distribution",
+            color_discrete_sequence=['#FF5722', '#FFC107', '#4CAF50']
+        )
+        st.plotly_chart(fig, use_container_width=True)
         
-        # Row 1: Team possession + Zone breakdown
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.subheader("📊 Team Possession Breakdown")
-            
-            if team_poss.get('A', 0) > 0 or team_poss.get('B', 0) > 0:
-                fig = go.Figure(data=[go.Pie(
-                    labels=['Team A', 'Team B'],
-                    values=[team_poss.get('A', 0), team_poss.get('B', 0)],
-                    marker=dict(colors=['#4CAF50', '#F44336']),
-                    hole=0.4,
-                    textinfo='label+percent',
-                    textfont_size=16
-                )])
-                fig.update_layout(
-                    height=350,
-                    showlegend=True,
-                    annotations=[dict(text='Possession', x=0.5, y=0.5, font_size=20, showarrow=False)]
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Tactical insight
-                team_a_poss = team_poss.get('A', 0)
-                if team_a_poss > 60:
-                    st.success("✅ Team A dominated possession - controlling the game")
-                elif team_a_poss < 40:
-                    st.info("🔄 Team B dominated possession - Team A playing counter-attacking style")
-                else:
-                    st.info("⚖️ Balanced possession - competitive match")
-            else:
-                st.warning("No possession data available for visualization")
-        
-        with col2:
-            st.subheader("🗺️ Possession by Zone")
-            
-            zone_stats = possession_data.get('zone_stats', {})
-            
-            if zone_stats:
-                # Create stacked bar chart for zones
-                zone_data = []
-                for team in ['A', 'B']:
-                    if team in zone_stats:
-                        for zone, pct in zone_stats[team].items():
-                            zone_data.append({
-                                'Team': f'Team {team}',
-                                'Zone': zone,
-                                'Percentage': pct
-                            })
-                
-                if zone_data:
-                    zone_df = pd.DataFrame(zone_data)
-                    fig = px.bar(
-                        zone_df,
-                        x='Team',
-                        y='Percentage',
-                        color='Zone',
-                        title='Possession Distribution by Tactical Zone',
-                        color_discrete_map={
-                            'Defensive': '#2196F3',
-                            'Midfield': '#FFC107',
-                            'Attacking': '#F44336'
-                        },
-                        text='Percentage'
-                    )
-                    fig.update_traces(texttemplate='%{text:.1f}%', textposition='inside')
-                    fig.update_layout(height=350, yaxis_title='Possession %')
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Tactical insight
-                    team_a_zones = zone_stats.get('A', {})
-                    if team_a_zones.get('Attacking', 0) > 40:
-                        st.success("⚔️ Team A: Aggressive attacking style - high possession in final third")
-                    elif team_a_zones.get('Defensive', 0) > 40:
-                        st.info("🛡️ Team A: Defensive style - building from the back")
-            else:
-                st.warning("No zone statistics available")
-        
-        st.markdown("---")
-        
-        # Row 2: Pressure stats + Duration analysis
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.subheader("💪 Pressure Statistics")
-            
-            pressure_stats = possession_data.get('pressure_stats', {})
-            
-            if pressure_stats and pressure_stats.get('total_high_pressure_events', 0) > 0:
-                high_press_events = pressure_stats.get('total_high_pressure_events', 0)
-                avg_pressure = pressure_stats.get('avg_pressure_count', 0)
-                max_pressure = pressure_stats.get('max_pressure_count', 0)
-                
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    st.metric("High Pressure Events", high_press_events, help="Possessions with 3+ opponents nearby")
-                with col_b:
-                    st.metric("Avg Opponents", f"{avg_pressure:.1f}")
-                with col_c:
-                    st.metric("Max Opponents", max_pressure)
-                
-                # Pressure insight
-                if high_press_events > 10:
-                    st.warning("🔥 High defensive pressure throughout the match - physical, intense game")
-                else:
-                    st.info("💨 Low defensive pressure - teams playing with space")
-            else:
-                st.info("No high-pressure events recorded (< 3 opponents pressing)")
-        
-        with col2:
-            st.subheader("⏱️ Possession Duration Analysis")
-            
-            duration_stats = possession_data.get('duration_stats', {})
-            
-            if duration_stats and duration_stats.get('total_possessions', 0) > 0:
-                avg_duration = duration_stats.get('avg_duration', 0)
-                short_pct = duration_stats.get('short_pct', 0)
-                medium_pct = duration_stats.get('medium_pct', 0)
-                long_pct = duration_stats.get('long_pct', 0)
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("Avg Duration", f"{avg_duration:.2f}s")
-                with col_b:
-                    st.metric("Total Possessions", duration_stats.get('total_possessions', 0))
-                
-                # Duration breakdown chart
-                duration_data = pd.DataFrame({
-                    'Category': ['Short (<2s)', 'Medium (2-5s)', 'Long (>5s)'],
-                    'Percentage': [short_pct, medium_pct, long_pct]
-                })
-                
-                fig = px.bar(
-                    duration_data,
-                    x='Category',
-                    y='Percentage',
-                    color='Category',
-                    color_discrete_map={
-                        'Short (<2s)': '#FF5722',
-                        'Medium (2-5s)': '#FFC107',
-                        'Long (>5s)': '#4CAF50'
-                    },
-                    text='Percentage'
-                )
-                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                fig.update_layout(height=250, showlegend=False, yaxis_title='% of Possessions')
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Playing style insight
-                if short_pct > 50:
-                    st.info("⚡ Direct playing style - quick, fast-paced transitions")
-                elif long_pct > 30:
-                    st.success("🧠 Patient build-up play - controlled possession style")
-                else:
-                    st.info("⚖️ Balanced playing style - mix of direct and build-up play")
-            else:
-                st.info("Not enough possession data for duration analysis")
-        
-        st.markdown("---")
-        
-        # Row 3: Player possession leaders
-        st.subheader("👥 Player Possession Leaders")
-        
-        player_poss_stats = possession_data.get('player_stats', {})
-        
-        if player_poss_stats:
-            # Build dataframe
-            poss_rows = []
-            for pid_str, stats in player_poss_stats.items():
-                pid = int(pid_str)
-                # Get team from tracks
-                tracks_df = build_tracks_df(metrics)
-                team = "?"
-                if not tracks_df.empty:
-                    player_team = tracks_df[tracks_df['player_id'] == pid]['team'].values
-                    team = player_team[0] if len(player_team) > 0 else "?"
-                
-                poss_rows.append({
-                    'Player': f"P{pid}",
-                    'Team': team,
-                    'Touches': stats.get('touch_count', 0),
-                    'Time (s)': stats.get('total_time', 0),
-                    'Avg Duration (s)': stats.get('avg_possession_duration', 0)
-                })
-            
-            poss_df = pd.DataFrame(poss_rows)
-            poss_df = poss_df.sort_values('Touches', ascending=False).head(10)
-            
-            # Format for display
-            poss_df['Time (s)'] = poss_df['Time (s)'].round(1)
-            poss_df['Avg Duration (s)'] = poss_df['Avg Duration (s)'].round(2)
-            
-            st.dataframe(poss_df, use_container_width=True, height=400)
-            
-            # Top player insight
-            if not poss_df.empty:
-                top_player = poss_df.iloc[0]
-                st.info(f"🌟 **Key Player:** {top_player['Player']} (Team {top_player['Team']}) - {int(top_player['Touches'])} touches, {top_player['Time (s)']:.1f}s possession time")
-        else:
-            st.warning("No player possession stats available")
+        # Tactical insight
+        if short_pct > 70:
+            st.info("📊 **Tactical Insight:** High percentage of short possessions indicates a direct, fast-paced playing style.")
+        elif long_pct > 30:
+            st.info("📊 **Tactical Insight:** Significant long possessions suggest patient build-up play and ball retention.")
+    else:
+        st.info("Duration statistics not available")
 
 # ============================================================
-# TAB 5: STATISTICS
+# TAB 5: PASS ANALYTICS (NEW)
 # ============================================================
 with tab5:
+    st.header("🎯 Pass Detection & Analysis")
+    st.markdown("**Understanding passing patterns, accuracy, and team connectivity**")
+    
+    if not pass_detection or pass_detection.get("total_passes", 0) == 0:
+        st.warning("No passes detected in this video. This could be due to:")
+        st.markdown("""
+        - Low ball velocity during possession changes
+        - Short distances between players (< 5m counted as dribbles)
+        - Limited possession changes in the footage
+        """)
+    else:
+        # Overview metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Passes", pass_detection.get("total_passes", 0))
+        col2.metric("Completed", pass_detection.get("completed_passes", 0), 
+                   delta=f"{pass_detection.get('pass_accuracy', 0):.0f}% accuracy")
+        col3.metric("Intercepted", pass_detection.get("intercepted_passes", 0))
+        col4.metric("Avg Distance", f"{pass_detection.get('distance', {}).get('avg_m', 0):.1f}m")
+        
+        st.markdown("---")
+        
+        # Pass direction breakdown
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📍 Pass Direction")
+            direction = pass_detection.get("direction", {})
+            
+            if direction:
+                forward = direction.get("forward", 0)
+                backward = direction.get("backward", 0)
+                lateral = direction.get("lateral", 0)
+                
+                fig = px.pie(
+                    values=[forward, backward, lateral],
+                    names=['Forward', 'Backward', 'Lateral'],
+                    title="Pass Direction Distribution",
+                    color_discrete_sequence=['#4CAF50', '#FF9800', '#2196F3']
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Direction metrics
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Forward", f"{direction.get('forward_pct', 0):.0f}%")
+                m2.metric("Backward", f"{direction.get('backward_pct', 0):.0f}%")
+                m3.metric("Lateral", f"{direction.get('lateral_pct', 0):.0f}%")
+        
+        with col2:
+            st.subheader("📊 Team Comparison")
+            team_passes = pass_detection.get("team_passes", {})
+            team_accuracy = pass_detection.get("team_accuracy", {})
+            
+            if team_passes:
+                team_a = team_passes.get("A", {})
+                team_b = team_passes.get("B", {})
+                
+                fig = go.Figure(data=[
+                    go.Bar(name='Attempted', x=['Team A', 'Team B'], 
+                           y=[team_a.get('attempted', 0), team_b.get('attempted', 0)],
+                           marker_color='#2196F3'),
+                    go.Bar(name='Completed', x=['Team A', 'Team B'], 
+                           y=[team_a.get('completed', 0), team_b.get('completed', 0)],
+                           marker_color='#4CAF50')
+                ])
+                fig.update_layout(
+                    barmode='group',
+                    title="Passes by Team",
+                    yaxis_title="Number of Passes"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Team accuracy
+                m1, m2 = st.columns(2)
+                m1.metric("Team A Accuracy", f"{team_accuracy.get('A', 0):.1f}%")
+                m2.metric("Team B Accuracy", f"{team_accuracy.get('B', 0):.1f}%")
+        
+        st.markdown("---")
+        
+        # Pass distance analysis
+        st.subheader("📏 Pass Distance Analysis")
+        distance_stats = pass_detection.get("distance", {})
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Average", f"{distance_stats.get('avg_m', 0):.1f}m")
+        col2.metric("Shortest", f"{distance_stats.get('min_m', 0):.1f}m")
+        col3.metric("Longest", f"{distance_stats.get('max_m', 0):.1f}m")
+        
+        # Pass events table
+        st.markdown("---")
+        st.subheader("📋 Recent Passes")
+        
+        pass_df = build_pass_events_df(metrics)
+        if not pass_df.empty:
+            # Style the dataframe
+            st.dataframe(
+                pass_df.tail(20),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No pass event details available")
+        
+        st.markdown("---")
+        
+        # Player passing stats
+        st.subheader("👤 Player Passing Statistics")
+        
+        player_pass_df = build_player_passing_df(metrics)
+        if not player_pass_df.empty:
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                fig = px.bar(
+                    player_pass_df.head(10),
+                    x='player_id',
+                    y=['completed', 'attempted'],
+                    title="Top 10 Passers",
+                    barmode='overlay',
+                    labels={'value': 'Passes', 'player_id': 'Player ID'},
+                    color_discrete_map={'completed': '#4CAF50', 'attempted': '#E0E0E0'}
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("**Passing Leaderboard**")
+                st.dataframe(
+                    player_pass_df[['player_id', 'attempted', 'accuracy']].head(10),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.info("No player passing data available")
+        
+        # Passing network
+        st.markdown("---")
+        st.subheader("🔗 Passing Network")
+        
+        passing_network = metrics.get("passing_network", {})
+        top_combinations = passing_network.get("most_common_combinations", [])
+        
+        if top_combinations:
+            st.markdown("**Most Frequent Passing Combinations:**")
+            
+            for i, combo in enumerate(top_combinations[:5], 1):
+                col1, col2, col3 = st.columns([1, 2, 1])
+                col1.write(f"**#{i}**")
+                col2.write(f"Player {combo['from']} → Player {combo['to']}")
+                col3.write(f"**{combo['count']} passes**")
+        else:
+            st.info("No passing network data available")
+        
+        # Tactical insight
+        st.markdown("---")
+        if pass_detection.get("pass_accuracy", 0) > 80:
+            st.success("📊 **Tactical Insight:** Excellent passing accuracy (>80%) indicates strong ball retention and controlled play.")
+        elif pass_detection.get("pass_accuracy", 0) > 60:
+            st.info("📊 **Tactical Insight:** Good passing accuracy. Consider focusing on reducing turnovers in attacking third.")
+        else:
+            st.warning("📊 **Tactical Insight:** Low passing accuracy suggests the team is under pressure or attempting risky passes.")
+        
+        direction = pass_detection.get("direction", {})
+        if direction.get("forward_pct", 0) > 60:
+            st.info("📊 **Style:** Direct, attacking style with majority forward passes.")
+        elif direction.get("backward_pct", 0) > 40:
+            st.info("📊 **Style:** Patient build-up play with significant backward/recycling passes.")
+
+# ============================================================
+# TAB 6: STATISTICS
+# ============================================================
+with tab6:
     st.header("📈 Overall Match Statistics")
     
     tracks_df = build_tracks_df(metrics)
     
     if tracks_df.empty:
-        st.warning("No tracking data available")
+        st.warning("No player statistics available")
     else:
         # Team comparison
-        st.subheader("🏆 Team Performance Comparison")
+        st.subheader("Team Comparison")
         
         team_stats = tracks_df.groupby('team').agg({
             'total_distance_m': 'sum',
             'avg_speed_mps': 'mean',
             'max_speed_mps': 'max',
-            'workload_score': 'mean',
-            'involvement_index': 'mean'
+            'workload_score': 'mean'
         }).round(2)
         
         st.dataframe(team_stats, use_container_width=True)
         
-        # Player rankings
-        st.subheader("🥇 Player Rankings")
+        # Top players
+        st.subheader("Top Performers")
         
-        metric_choice = st.selectbox(
-            "Rank by",
-            ['total_distance_m', 'avg_speed_mps', 'max_speed_mps', 'workload_score', 'involvement_index']
-        )
+        col1, col2 = st.columns(2)
         
-        ranked = tracks_df.sort_values(metric_choice, ascending=False)[
-            ['player_id', 'team', metric_choice]
-        ].head(10)
+        with col1:
+            st.markdown("**Most Distance Covered**")
+            top_distance = tracks_df.nlargest(5, 'total_distance_m')[['player_id', 'team', 'total_distance_m']]
+            st.dataframe(top_distance, use_container_width=True, hide_index=True)
         
-        st.dataframe(ranked, use_container_width=True)
+        with col2:
+            st.markdown("**Highest Involvement**")
+            top_involvement = tracks_df.nlargest(5, 'involvement_index')[['player_id', 'team', 'involvement_index']]
+            st.dataframe(top_involvement, use_container_width=True, hide_index=True)
 
 # ============================================================
-# TAB 6: MOVEMENT METRICS
+# TAB 7: MOVEMENT METRICS
 # ============================================================
-with tab6:
+with tab7:
     st.header("🏃 Movement & Workload Analysis")
     
     tracks_df = build_tracks_df(metrics)
@@ -615,4 +657,4 @@ with tab6:
 
 # Footer
 st.markdown("---")
-st.markdown("**TactiVision** - Professional Football Analytics | Assistant Manager Dashboard v2.0 (Enhanced)")
+st.markdown("**TactiVision** - Professional Football Analytics | Assistant Manager Dashboard v3.0 (Pass Detection)")

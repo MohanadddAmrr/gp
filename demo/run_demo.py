@@ -12,6 +12,7 @@ from ultralytics import YOLO
 from services.ball_tracker import BallTracker
 from services.possession_tracker import PossessionTracker
 from services.ball_detector import ColorBallDetector
+from services.event_detector import EventDetector
 
 
 # ============================================================
@@ -81,7 +82,13 @@ def process_video(video_path: Path, model: YOLO):
     # --------------------------------------------------------
     ball_tracker = BallTracker(max_history=30, velocity_window=3)
     possession_tracker = PossessionTracker(distance_threshold=50.0)
+    event_detector = EventDetector(min_velocity_mps=1.0, min_distance_m=5.0, max_distance_m=45.0)
+
     color_ball_detector = ColorBallDetector()  # Hybrid: fallback detector
+    
+    # Calculate meter_per_px early (needed for pass detection)
+    meter_per_px = 105.0 / width if width > 0 else 1.0  # Standard pitch = 105m wide
+    
     ball_position_history = []
     heat_ball = np.zeros((height, width), dtype=np.float32)
     
@@ -177,6 +184,10 @@ def process_video(video_path: Path, model: YOLO):
             ball_box, frame_idx, t, width, height, max_missing_frames=5
         )
         
+        # Initialize possession_context for this frame
+        possession_context = None
+        player_positions = {}
+        
         if tracked:
             if method == "predicted":
                 predicted_detections += 1
@@ -205,7 +216,6 @@ def process_video(video_path: Path, model: YOLO):
                 
                 # --------- ENHANCED POSSESSION DETECTION WITH CONTEXT ----------
                 # Build player_positions dict: {player_id: (x, y, team)}
-                player_positions = {}
                 for pid, pbox, pcls in zip(ids, xyxy, cls_arr):
                     if pcls != PERSON_CLASS:
                         continue
@@ -224,6 +234,24 @@ def process_video(video_path: Path, model: YOLO):
                     frame_width=width,
                     frame_height=height
                 )
+                
+                # --------- PASS DETECTION ----------
+                ball_velocity_mps = ball_tracker.get_velocity() * meter_per_px
+                pass_event = event_detector.detect_pass(
+                    current_possessor=possession_tracker.get_current_possessor(),
+                    current_team=possession_tracker.get_current_team(),
+                    player_positions=player_positions,
+                    ball_velocity_mps=ball_velocity_mps,
+                    meter_per_px=meter_per_px,
+                    frame_idx=frame_idx,
+                    timestamp=t,
+                    frame_width=width
+                )
+                
+                if pass_event:
+                    outcome = pass_event['outcome']
+                    print(f"[PASS] {pass_event['passer_id']} -> {pass_event['receiver_id']} "
+                          f"({outcome}, {pass_event['distance_m']}m, {pass_event['direction']})")
 
         # --------- DRAW PLAYERS + BALL ----------
         # Get current possessor for highlighting
@@ -371,8 +399,6 @@ def process_video(video_path: Path, model: YOLO):
     # ============================================================
     # METRICS (distance / speed / workload / involvement)
     # ============================================================
-    meter_per_px = 105.0 / width if width > 0 else 1.0
-
     tracks_list = []
     all_step_lengths = []
 
@@ -463,6 +489,11 @@ def process_video(video_path: Path, model: YOLO):
     player_possession_stats = possession_tracker.get_player_possession_stats()
     possession_history = possession_tracker.get_possession_history()
     
+    # Get pass detection statistics
+    pass_stats = event_detector.get_pass_statistics()
+    pass_events = event_detector.get_pass_events()
+    passing_network = event_detector.get_passing_network()
+    
     metrics = {
         "frame": frame_idx,
         "num_players": len(track_history),
@@ -492,6 +523,9 @@ def process_video(video_path: Path, model: YOLO):
             "duration_stats": possession_stats.get('duration_stats', {}),
             "zone_changes": possession_stats.get('zone_changes', 0)
         },
+        "pass_detection": pass_stats,
+        "pass_events": pass_events[-50:],  # Last 50 passes
+        "passing_network": passing_network,
         "tracks": tracks_list,
     }
 
@@ -508,6 +542,13 @@ def process_video(video_path: Path, model: YOLO):
     duration_stats = possession_stats.get('duration_stats', {})
     if duration_stats.get('total_possessions', 0) > 0:
         print(f"  Possession style - Short: {duration_stats.get('short_pct', 0):.0f}%, Medium: {duration_stats.get('medium_pct', 0):.0f}%, Long: {duration_stats.get('long_pct', 0):.0f}%")
+    
+    # NEW: Print pass detection summary
+    print(f"  Passes detected: {pass_stats['total_passes']} (Completed: {pass_stats['completed_passes']}, Intercepted: {pass_stats['intercepted_passes']})")
+    if pass_stats['total_passes'] > 0:
+        print(f"  Pass accuracy: {pass_stats['pass_accuracy']:.1f}%")
+        print(f"  Pass direction - Forward: {pass_stats['direction']['forward_pct']:.0f}%, Backward: {pass_stats['direction']['backward_pct']:.0f}%, Lateral: {pass_stats['direction']['lateral_pct']:.0f}%")
+        print(f"  Avg pass distance: {pass_stats['distance']['avg_m']:.1f}m")
 
 
 def main():
