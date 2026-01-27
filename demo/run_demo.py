@@ -82,11 +82,18 @@ def process_video(video_path: Path, model: YOLO):
     # --------------------------------------------------------
     ball_tracker = BallTracker(max_history=30, velocity_window=3)
     possession_tracker = PossessionTracker(distance_threshold=50.0)
-    event_detector = EventDetector(min_velocity_mps=1.0, min_distance_m=5.0, max_distance_m=45.0)
+    event_detector = EventDetector(
+        min_velocity_mps=1.0, 
+        min_distance_m=5.0, 
+        max_distance_m=45.0,
+        shot_velocity_threshold_mps=5.0,
+        shot_max_velocity_mps=200.0,
+        shot_angle_threshold_deg=30.0
+    )
 
     color_ball_detector = ColorBallDetector()  # Hybrid: fallback detector
     
-    # Calculate meter_per_px early (needed for pass detection)
+    # Calculate meter_per_px early (needed for pass/shot detection)
     meter_per_px = 105.0 / width if width > 0 else 1.0  # Standard pitch = 105m wide
     
     ball_position_history = []
@@ -252,6 +259,22 @@ def process_video(video_path: Path, model: YOLO):
                     outcome = pass_event['outcome']
                     print(f"[PASS] {pass_event['passer_id']} -> {pass_event['receiver_id']} "
                           f"({outcome}, {pass_event['distance_m']}m, {pass_event['direction']})")
+                
+                # --------- SHOT DETECTION ----------
+                ball_direction = ball_tracker.get_direction()
+                shot_event = event_detector.detect_shot(
+                    ball_position=ball_position,
+                    ball_direction=(float(ball_direction[0]), float(ball_direction[1])),
+                    ball_velocity_mps=ball_velocity_mps,
+                    frame_idx=frame_idx,
+                    timestamp=t,
+                    frame_width=width,
+                    frame_height=height
+                )
+                
+                if shot_event:
+                    print(f"[SHOT] Player {shot_event['shooter_id']} (Team {shot_event['shooter_team']}) "
+                          f"- {shot_event['velocity_mps']:.1f} m/s, angle: {shot_event['angle_to_goal_deg']:.1f}°")
 
         # --------- DRAW PLAYERS + BALL ----------
         # Get current possessor for highlighting
@@ -283,11 +306,9 @@ def process_video(video_path: Path, model: YOLO):
                 )
         
         # Draw ball if tracked
-                # Draw ball if tracked
         if tracked:
             ball_bbox = ball_tracker.get_bbox()
-            if ball_bbox is not None:  # <- FIXED
-
+            if ball_bbox is not None:
                 x1, y1, x2, y2 = map(int, ball_bbox)
                 vel = ball_tracker.get_velocity()
                 
@@ -494,6 +515,10 @@ def process_video(video_path: Path, model: YOLO):
     pass_events = event_detector.get_pass_events()
     passing_network = event_detector.get_passing_network()
     
+    # Get shot detection statistics
+    shot_stats = event_detector.get_shot_statistics()
+    shot_events = event_detector.get_shot_events()
+    
     metrics = {
         "frame": frame_idx,
         "num_players": len(track_history),
@@ -517,15 +542,16 @@ def process_video(video_path: Path, model: YOLO):
             "possession_history": possession_history,
             "total_possession_changes": len(possession_history),
             "possession_rate": possession_stats.get('possession_rate', 0.0),
-            # NEW: Enhanced tactical metrics
             "zone_stats": possession_stats.get('zone_stats', {}),
             "pressure_stats": possession_stats.get('pressure_stats', {}),
             "duration_stats": possession_stats.get('duration_stats', {}),
             "zone_changes": possession_stats.get('zone_changes', 0)
         },
         "pass_detection": pass_stats,
-        "pass_events": pass_events[-50:],  # Last 50 passes
+        "pass_events": pass_events[-50:],
         "passing_network": passing_network,
+        "shot_detection": shot_stats,
+        "shot_events": shot_events,
         "tracks": tracks_list,
     }
 
@@ -538,17 +564,22 @@ def process_video(video_path: Path, model: YOLO):
     print(f"  Possession - Team A: {possession_percentage['A']:.1f}%, Team B: {possession_percentage['B']:.1f}%")
     print(f"  Possession changes: {len(possession_history)}")
     
-    # NEW: Print tactical insights
+    # Print tactical insights
     duration_stats = possession_stats.get('duration_stats', {})
     if duration_stats.get('total_possessions', 0) > 0:
         print(f"  Possession style - Short: {duration_stats.get('short_pct', 0):.0f}%, Medium: {duration_stats.get('medium_pct', 0):.0f}%, Long: {duration_stats.get('long_pct', 0):.0f}%")
     
-    # NEW: Print pass detection summary
+    # Print pass detection summary
     print(f"  Passes detected: {pass_stats['total_passes']} (Completed: {pass_stats['completed_passes']}, Intercepted: {pass_stats['intercepted_passes']})")
     if pass_stats['total_passes'] > 0:
         print(f"  Pass accuracy: {pass_stats['pass_accuracy']:.1f}%")
         print(f"  Pass direction - Forward: {pass_stats['direction']['forward_pct']:.0f}%, Backward: {pass_stats['direction']['backward_pct']:.0f}%, Lateral: {pass_stats['direction']['lateral_pct']:.0f}%")
         print(f"  Avg pass distance: {pass_stats['distance']['avg_m']:.1f}m")
+    
+    # Print shot detection summary
+    print(f"  Shots detected: {shot_stats['total_shots']} (Team A: {shot_stats['team_shots']['A']}, Team B: {shot_stats['team_shots']['B']})")
+    if shot_stats['total_shots'] > 0:
+        print(f"  Avg shot velocity: {shot_stats['velocity']['avg_mps']:.1f} m/s, Max: {shot_stats['velocity']['max_mps']:.1f} m/s")
 
 
 def main():

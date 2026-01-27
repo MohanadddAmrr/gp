@@ -187,21 +187,25 @@ if not metrics:
 ball_tracking = metrics.get("ball_tracking", {})
 possession_data = metrics.get("possession", {})
 pass_detection = metrics.get("pass_detection", {})
+shot_detection = metrics.get("shot_detection", {})
+shot_events_data = metrics.get("shot_events", [])
 ball_detected = ball_tracking.get("total_detections", 0) > 0
 detection_rate = ball_tracking.get("detection_rate", 0) * 100
 
 # ============================================================
 # TABS
 # ============================================================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "🔥 Team Heatmaps",
-    "👤 Player Analysis",
-    "⚽ Ball Analytics",
-    "🎯 Possession Analytics",
-    "🎯 Pass Analytics",
-    "📈 Statistics",
-    "🏃 Movement Metrics"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "Team Heatmaps",
+    "Player Analysis",
+    "Ball Analytics",
+    "Possession Analytics",
+    "Pass Analytics",
+    "Shot Analytics",
+    "Statistics",
+    "Movement Metrics"
 ])
+
 
 # ============================================================
 # TAB 1: TEAM HEATMAPS
@@ -581,11 +585,176 @@ with tab5:
             st.info("📊 **Style:** Direct, attacking style with majority forward passes.")
         elif direction.get("backward_pct", 0) > 40:
             st.info("📊 **Style:** Patient build-up play with significant backward/recycling passes.")
-
+            
+            
 # ============================================================
-# TAB 6: STATISTICS
+# TAB 6: SHOTS
 # ============================================================
 with tab6:
+    st.header("🔫 Shot Detection & Analysis")
+    st.markdown("**Analyzing shots on goal, shooting power, and threat zones**")
+    
+    if not shot_detection or shot_detection.get("total_shots", 0) == 0:
+        st.warning("No shots detected in this video. This could be due to:")
+        st.markdown("""
+        - No shots on goal occurred in the footage
+        - Ball velocity didn't reach shot threshold (5+ m/s)
+        - Ball wasn't in attacking third during high-velocity movement
+        - Ball direction wasn't aimed toward goal (within 30°)
+        """)
+        st.info("💡 Shot detection requires the ball to be moving fast, in the attacking third, and directed toward goal.")
+    else:
+        # Overview metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Shots", shot_detection.get("total_shots", 0))
+        col2.metric("Team A Shots", shot_detection.get("team_shots", {}).get("A", 0))
+        col3.metric("Team B Shots", shot_detection.get("team_shots", {}).get("B", 0))
+        velocity = shot_detection.get("velocity", {})
+        col4.metric("Avg Velocity", f"{velocity.get('avg_mps', 0):.1f} m/s")
+        
+        st.markdown("---")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📊 Team Shot Comparison")
+            team_shots = shot_detection.get("team_shots", {})
+            team_a_shots = team_shots.get("A", 0)
+            team_b_shots = team_shots.get("B", 0)
+            
+            fig = go.Figure(data=[
+                go.Bar(
+                    name='Team A', x=['Shots'], y=[team_a_shots],
+                    marker_color='#4CAF50'
+                ),
+                go.Bar(
+                    name='Team B', x=['Shots'], y=[team_b_shots],
+                    marker_color='#F44336'
+                )
+            ])
+            fig.update_layout(
+                barmode='group',
+                title="Shots by Team",
+                yaxis_title="Number of Shots"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.subheader("⚡ Shot Velocity Stats")
+            vel = shot_detection.get("velocity", {})
+            
+            v1, v2, v3 = st.columns(3)
+            v1.metric("Min", f"{vel.get('min_mps', 0):.1f} m/s")
+            v2.metric("Avg", f"{vel.get('avg_mps', 0):.1f} m/s")
+            v3.metric("Max", f"{vel.get('max_mps', 0):.1f} m/s")
+            
+            # Velocity distribution if we have shot events
+            if shot_events_data:
+                velocities = [s['velocity_mps'] for s in shot_events_data]
+                fig = px.histogram(
+                    x=velocities,
+                    nbins=10,
+                    title="Shot Velocity Distribution",
+                    labels={'x': 'Velocity (m/s)', 'y': 'Count'},
+                    color_discrete_sequence=['#FF5722']
+                )
+                fig.update_layout(showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Player shooting leaderboard
+        st.subheader("🏆 Top Shooters")
+        player_shots = shot_detection.get("player_shots", {})
+        if player_shots:
+            shooter_df = pd.DataFrame([
+                {'Player ID': int(pid), 'Shots': count}
+                for pid, count in player_shots.items()
+            ]).sort_values('Shots', ascending=False)
+            
+            fig = px.bar(
+                shooter_df,
+                x='Player ID',
+                y='Shots',
+                title="Shots by Player",
+                color='Shots',
+                color_continuous_scale='OrRd'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Shot events table
+        st.subheader("📋 Shot Events Log")
+        if shot_events_data:
+            shot_table = pd.DataFrame([
+                {
+                    'Frame': s['frame'],
+                    'Time (s)': f"{s['timestamp']:.1f}",
+                    'Shooter': f"Player {s['shooter_id']}",
+                    'Team': s['shooter_team'],
+                    'Velocity (m/s)': f"{s['velocity_mps']:.1f}",
+                    'Angle to Goal (°)': f"{s['angle_to_goal_deg']:.1f}",
+                    'Position': f"({s['ball_position'][0]:.0f}, {s['ball_position'][1]:.0f})"
+                }
+                for s in shot_events_data
+            ])
+            st.dataframe(shot_table, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        # Shot map visualization
+        st.subheader("🗺️ Shot Map")
+        if shot_events_data:
+            shot_x = [s['ball_position'][0] for s in shot_events_data]
+            shot_y = [s['ball_position'][1] for s in shot_events_data]
+            shot_vel = [s['velocity_mps'] for s in shot_events_data]
+            shot_teams = [s['shooter_team'] for s in shot_events_data]
+            shot_labels = [f"Player {s['shooter_id']} ({s['velocity_mps']:.1f} m/s)" for s in shot_events_data]
+            
+            fig = px.scatter(
+                x=shot_x, y=shot_y,
+                size=shot_vel,
+                color=shot_teams,
+                hover_name=shot_labels,
+                title="Shot Locations on Pitch",
+                labels={'x': 'X Position (px)', 'y': 'Y Position (px)', 'color': 'Team'},
+                color_discrete_map={'A': '#4CAF50', 'B': '#F44336'}
+            )
+            fig.update_yaxes(autorange='reversed')
+            fig.update_layout(
+                xaxis_title="Pitch Width",
+                yaxis_title="Pitch Height"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Tactical insights
+        st.markdown("---")
+        st.subheader("💡 Shot Tactical Insights")
+        total = shot_detection.get("total_shots", 0)
+        team_a = shot_detection.get("team_shots", {}).get("A", 0)
+        team_b = shot_detection.get("team_shots", {}).get("B", 0)
+        
+        if team_a > team_b:
+            st.success(f"Team A is more offensive with {team_a} shots vs Team B's {team_b} shots.")
+        elif team_b > team_a:
+            st.success(f"Team B is more offensive with {team_b} shots vs Team A's {team_a} shots.")
+        else:
+            st.info("Both teams have equal shot attempts.")
+        
+        avg_vel = shot_detection.get("velocity", {}).get("avg_mps", 0)
+        if avg_vel > 25:
+            st.info(f"High average shot power at {avg_vel:.1f} m/s — strong shooting from distance.")
+        elif avg_vel > 15:
+            st.info(f"Moderate shot velocity at {avg_vel:.1f} m/s — balanced approach play.")
+        else:
+            st.info(f"Lower shot velocity at {avg_vel:.1f} m/s — shots likely from close range.")
+
+# ============================================================
+# TAB 7: STATISTICS
+# ============================================================
+
+with tab7:
     st.header("📈 Overall Match Statistics")
     
     tracks_df = build_tracks_df(metrics)
@@ -621,9 +790,9 @@ with tab6:
             st.dataframe(top_involvement, use_container_width=True, hide_index=True)
 
 # ============================================================
-# TAB 7: MOVEMENT METRICS
+# TAB 8: MOVEMENT METRICS
 # ============================================================
-with tab7:
+with tab8:
     st.header("🏃 Movement & Workload Analysis")
     
     tracks_df = build_tracks_df(metrics)
@@ -657,4 +826,5 @@ with tab7:
 
 # Footer
 st.markdown("---")
-st.markdown("**TactiVision** - Professional Football Analytics | Assistant Manager Dashboard v3.0 (Pass Detection)")
+st.markdown("**TactiVision** - Professional Football Analytics | Assistant Manager Dashboard")
+
