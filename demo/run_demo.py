@@ -13,6 +13,7 @@ from services.ball_tracker import BallTracker
 from services.possession_tracker import PossessionTracker
 from services.ball_detector import ColorBallDetector
 from services.event_detector import EventDetector
+from services.sprint_detector import SprintDetector
 
 
 # ============================================================
@@ -90,6 +91,7 @@ def process_video(video_path: Path, model: YOLO):
         shot_max_velocity_mps=200.0,
         shot_angle_threshold_deg=30.0
     )
+    sprint_detector = SprintDetector(sprint_threshold_mps=5.5, high_speed_threshold_mps=7.0)
 
     color_ball_detector = ColorBallDetector()  # Hybrid: fallback detector
     
@@ -162,6 +164,24 @@ def process_video(video_path: Path, model: YOLO):
             if tid not in heat_per_player:
                 heat_per_player[tid] = np.zeros_like(heat_global)
             heat_per_player[tid][iy, ix] += 1.0
+
+            # --------- SPRINT DETECTION ----------
+            history = track_history[tid]
+            if len(history) >= 2:
+                prev = history[-2]
+                dx = cx - prev[0]
+                dy = cy - prev[1]
+                dt = max(t - prev[2], 1e-3)
+                step_px = float(np.hypot(dx, dy))
+                speed_mps = step_px * meter_per_px / dt
+                player_team = 'A' if cx < width / 2.0 else 'B'
+                sprint_detector.update(
+                    player_id=int(tid),
+                    speed_mps=speed_mps,
+                    timestamp=t,
+                    team=player_team,
+                    position=(float(cx), float(cy)),
+                )
 
         # --------- ENHANCED BALL DETECTION: YOLO + Color + Prediction ----------
         ball_detected_this_frame = False
@@ -519,6 +539,12 @@ def process_video(video_path: Path, model: YOLO):
     shot_stats = event_detector.get_shot_statistics()
     shot_events = event_detector.get_shot_events()
     
+    # Finalize sprint detection
+    final_time = frame_idx / fps
+    sprint_detector.finalize(final_time)
+    sprint_stats = sprint_detector.get_statistics()
+    sprint_events = sprint_detector.get_sprint_events()
+    
     metrics = {
         "frame": frame_idx,
         "num_players": len(track_history),
@@ -552,6 +578,8 @@ def process_video(video_path: Path, model: YOLO):
         "passing_network": passing_network,
         "shot_detection": shot_stats,
         "shot_events": shot_events,
+        "sprint_detection": sprint_stats,
+        "sprint_events": sprint_events[-100:],
         "tracks": tracks_list,
     }
 
@@ -580,6 +608,12 @@ def process_video(video_path: Path, model: YOLO):
     print(f"  Shots detected: {shot_stats['total_shots']} (Team A: {shot_stats['team_shots']['A']}, Team B: {shot_stats['team_shots']['B']})")
     if shot_stats['total_shots'] > 0:
         print(f"  Avg shot velocity: {shot_stats['velocity']['avg_mps']:.1f} m/s, Max: {shot_stats['velocity']['max_mps']:.1f} m/s")
+    
+    # Print sprint detection summary
+    print(f"  Sprints detected: {sprint_stats['total_sprints']} (Team A: {sprint_stats['team_sprints']['A']}, Team B: {sprint_stats['team_sprints']['B']})")
+    if sprint_stats['total_sprints'] > 0:
+        print(f"  High intensity sprints: {sprint_stats['high_intensity_sprints']}")
+        print(f"  Top speed: {sprint_stats['top_speed_mps']:.1f} m/s, Avg sprint duration: {sprint_stats['avg_sprint_duration_sec']:.1f}s")
 
 
 def main():
