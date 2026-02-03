@@ -1,0 +1,634 @@
+# =============================================================================
+# TactiVision Pro - Configuration File
+# =============================================================================
+# This is the main configuration file for the TactiVision Pro football
+# analytics platform. Modify settings here to customize behavior.
+# =============================================================================
+
+# =============================================================================
+# APPLICATION SETTINGS
+# =============================================================================
+app:
+  name: "TactiVision Pro"
+  version: "2.0.0"
+  description: "Professional Football Analytics Platform"
+  debug: false
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file: "logs/tactivision.log"
+  max_log_size: "100MB"
+  log_backup_count: 5
+
+# =============================================================================
+# VIDEO PROCESSING SETTINGS
+# =============================================================================
+video:
+  # Default video parameters
+  default_fps: 25
+  default_resolution: [1920, 1080]
+  min_resolution: [640, 480]
+  max_resolution: [3840, 2160]
+  
+  # Processing parameters
+  processing_threads: 4
+  batch_size: 32
+  frame_skip: 1  # Process every Nth frame (1 = all frames)
+  buffer_size: 100  # Frame buffer size
+  
+  # Performance settings
+  use_gpu: true
+  gpu_memory_fraction: 0.8
+  mixed_precision: true
+  
+  # Input/Output
+  input_formats: [".mp4", ".avi", ".mov", ".mkv", ".wmv"]
+  output_format: "mp4"
+  output_codec: "h264"
+  output_quality: "high"  # low, medium, high, ultra
+
+# =============================================================================
+# OBJECT DETECTION & TRACKING
+# =============================================================================
+detection:
+  # Model settings
+  model: "yolov8n.pt"  # yolov8n.pt (fast), yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt (accurate)
+  model_path: "models/"
+  
+  # Detection parameters
+  confidence_threshold: 0.5
+  iou_threshold: 0.45
+  max_detections: 50
+  
+  # Class filtering (COCO classes)
+  # 0: person, 32: sports ball
+  target_classes: [0, 32]
+  
+  # Tracking parameters
+  tracking:
+    algorithm: "bytetrack"  # bytetrack, deepsort, sort
+    max_age: 30  # Maximum frames to keep lost tracks
+    min_hits: 3  # Minimum detections to confirm track
+    iou_threshold: 0.3
+    
+  # Player identification
+  player_id:
+    enabled: true
+    use_face_recognition: false
+    use_jersey_numbers: true
+    confidence_threshold: 0.7
+
+# =============================================================================
+# BALL TRACKING
+# =============================================================================
+ball_tracking:
+  enabled: true
+  
+  # Detection
+  detection_method: "combined"  # yolo, optical_flow, combined
+  confidence_threshold: 0.3
+  
+  # Tracking
+  smoothing_factor: 0.3
+  prediction_enabled: true
+  max_prediction_frames: 10
+  
+  # Physics
+  enable_physics: true
+  gravity: 9.81
+  air_resistance: 0.02
+  
+  # Velocity calculation
+  velocity_smoothing: 0.5
+  min_velocity: 0.5  # m/s
+  max_velocity: 40.0  # m/s
+
+# =============================================================================
+# TACTICAL ANALYSIS
+# =============================================================================
+tactical:
+  enabled: true
+  
+  # Formation detection
+  formation:
+    enabled: true
+    detection_interval: 5  # seconds
+    smoothing_window: 10
+    min_players: 8
+    
+  # Offside detection
+  offside:
+    enabled: true
+    confirmation_frames: 5
+    tolerance_meters: 0.5
+    
+  # Set piece detection
+  set_pieces:
+    enabled: true
+    detection_window: 3  # seconds
+    min_ball_velocity: 5.0  # m/s
+    
+  # Dribble detection
+  dribbles:
+    enabled: true
+    min_dribble_distance: 2.0  # meters
+    max_dribble_duration: 10.0  # seconds
+    
+  # Pressing intensity
+  pressing:
+    enabled: true
+    threshold: 2.5  # m/s closing speed
+    zone_radius: 10.0  # meters
+    
+  # Transition tracking
+  transitions:
+    enabled: true
+    possession_threshold: 0.5  # seconds
+    speed_threshold: 3.0  # m/s
+
+# =============================================================================
+# EXPECTED GOALS (xG) CALCULATION
+# =============================================================================
+xg:
+  enabled: true
+  
+  # Model settings
+  model: "default"  # default, custom
+  model_path: "models/xg_model.pkl"
+  
+  # Shot parameters
+  max_shot_distance: 40.0  # meters from goal
+  max_shot_angle: 90.0  # degrees
+  
+  # Feature weights (for default model)
+  weights:
+    distance: 0.35
+    angle: 0.25
+    body_part: 0.15
+    shot_type: 0.10
+    pressure: 0.10
+    assist_type: 0.05
+  
+  # Shot types
+  shot_types:
+    - open_play
+    - set_piece
+    - penalty
+    - free_kick
+    - corner
+    - header
+
+# =============================================================================
+# PHYSICAL ANALYTICS
+# =============================================================================
+physical:
+  enabled: true
+  
+  # Speed thresholds
+  speed:
+    walking: 2.0  # m/s
+    jogging: 4.0  # m/s
+    running: 5.5  # m/s
+    sprinting: 7.0  # m/s
+    
+  # Sprint detection
+  sprint:
+    min_duration: 1.0  # seconds
+    min_speed: 5.5  # m/s
+    min_distance: 10.0  # meters
+    
+  # Distance calculation
+  distance:
+    smoothing: 0.8
+    calibration_method: "pitch"  # pitch, gps, manual
+    pitch_length: 105.0  # meters
+    pitch_width: 68.0  # meters
+    
+  # Workload calculation
+  workload:
+    enabled: true
+    method: "weighted"  # simple, weighted, metabolic
+    decay_factor: 0.95
+
+# =============================================================================
+# PASSING ANALYTICS
+# =============================================================================
+passing:
+  enabled: true
+  
+  # Detection
+  min_pass_distance: 3.0  # meters
+  max_pass_duration: 5.0  # seconds
+  ball_possession_threshold: 0.5  # seconds
+  
+  # Classification
+  direction_thresholds:
+    forward: 30  # degrees
+    backward: 150  # degrees
+    
+  distance_thresholds:
+    short: 15  # meters
+    medium: 30  # meters
+    long: 50  # meters
+  
+  # Network analysis
+  network:
+    enabled: true
+    min_passes: 3
+    max_edge_distance: 50  # meters
+
+# =============================================================================
+# POSSESSION TRACKING
+# =============================================================================
+possession:
+  enabled: true
+  
+  # Calculation method
+  method: "proximity"  # proximity, control, model
+  
+  # Proximity settings
+  proximity_radius: 2.0  # meters
+  control_threshold: 0.5  # seconds
+  
+  # Zone definitions
+  zones:
+    defensive: [0, 35]  # percentage of pitch length
+    midfield: [35, 65]
+    attacking: [65, 100]
+  
+  # Smoothing
+  smoothing_window: 25  # frames
+
+# =============================================================================
+# HIGHLIGHTS GENERATION
+# =============================================================================
+highlights:
+  enabled: true
+  
+  # Event detection
+  events:
+    - goal
+    - shot
+    - save
+    - card
+    - substitution
+    - VAR_review
+    
+  # Clip settings
+  clip:
+    pre_event_buffer: 5.0  # seconds
+    post_event_buffer: 10.0  # seconds
+    min_duration: 3.0  # seconds
+    max_duration: 30.0  # seconds
+    
+  # Importance scoring
+  scoring:
+    goal: 100
+    penalty: 90
+    red_card: 85
+    VAR_goal: 80
+    great_save: 70
+    shot_on_target: 50
+    
+  # Output
+  output_format: "mp4"
+  output_resolution: [1920, 1080]
+  include_graphics: true
+
+# =============================================================================
+# DATABASE SETTINGS
+# =============================================================================
+database:
+  # Connection
+  path: "matches.db"
+  url: "sqlite:///matches.db"
+  
+  # Performance
+  max_connections: 10
+  connection_timeout: 30
+  
+  # Backup
+  backup_enabled: true
+  backup_interval: 3600  # seconds
+  backup_retention: 7  # days
+  backup_path: "backups/"
+  
+  # Maintenance
+  vacuum_interval: 86400  # seconds (daily)
+  analyze_interval: 3600  # seconds
+
+# =============================================================================
+# DASHBOARD SETTINGS
+# =============================================================================
+dashboard:
+  # Server
+  host: "localhost"
+  port: 8501
+  
+  # Appearance
+  theme: "dark"  # dark, light
+  primary_color: "#e63946"
+  secondary_color: "#4361ee"
+  accent_color: "#8b5cf6"
+  
+  # Behavior
+  auto_refresh: false
+  refresh_interval: 30  # seconds
+  max_data_points: 1000
+  
+  # Features
+  enable_downloads: true
+  enable_sharing: true
+  enable_comparisons: true
+  
+  # Performance
+  cache_ttl: 300  # seconds
+  max_upload_size: "200MB"
+
+# =============================================================================
+# BROADCAST GRAPHICS
+# =============================================================================
+broadcast:
+  enabled: true
+  
+  # Scoreboard
+  scoreboard:
+    enabled: true
+    style: "modern"  # modern, classic, minimal
+    show_possession: true
+    show_time: true
+    show_score: true
+    
+  # Lower thirds
+  lower_thirds:
+    enabled: true
+    duration: 5.0  # seconds
+    animation: "slide"  # slide, fade, none
+    
+  # Statistics overlays
+  stats:
+    enabled: true
+    update_interval: 5  # seconds
+    
+  # Customization
+  fonts:
+    primary: "Inter"
+    secondary: "Roboto"
+  
+  colors:
+    home: "#e63946"
+    away: "#4361ee"
+    neutral: "#ffffff"
+    background: "#1a1a24"
+
+# =============================================================================
+# STREAMING SETTINGS
+# =============================================================================
+streaming:
+  enabled: false
+  
+  # Input
+  input:
+    type: "rtmp"  # rtmp, file, webcam
+    url: "rtmp://localhost/live/stream"
+    buffer_size: 100
+    
+  # Output
+  output:
+    enabled: false
+    type: "rtmp"
+    url: "rtmp://youtube.com/live/..."
+    bitrate: "4500k"
+    
+  # WebRTC
+  webrtc:
+    enabled: false
+    signaling_server: "ws://localhost:8080"
+    
+  # Latency
+  target_latency: 2.0  # seconds
+  max_latency: 5.0  # seconds
+
+# =============================================================================
+# SOCIAL MEDIA EXPORT
+# =============================================================================
+social:
+  enabled: true
+  
+  # Platforms
+  platforms:
+    twitter:
+      enabled: true
+      max_duration: 140  # seconds
+      resolution: [1920, 1080]
+      aspect_ratio: "16:9"
+      
+    instagram:
+      enabled: true
+      max_duration: 90  # seconds
+      resolution: [1080, 1920]
+      aspect_ratio: "9:16"
+      
+    tiktok:
+      enabled: true
+      max_duration: 180  # seconds
+      resolution: [1080, 1920]
+      aspect_ratio: "9:16"
+      
+    youtube:
+      enabled: true
+      max_duration: 60  # seconds
+      resolution: [1920, 1080]
+      aspect_ratio: "16:9"
+  
+  # Auto-generation
+  auto_captions: true
+  auto_hashtags: true
+  watermark: true
+
+# =============================================================================
+# WEARABLE INTEGRATION
+# =============================================================================
+wearable:
+  enabled: false
+  
+  # Supported devices
+  devices:
+    - gps_vest
+    - heart_rate_monitor
+    - accelerometer
+    
+  # Data import
+  import_formats:
+    - gpx
+    - fit
+    - csv
+    - json
+    
+  # Sync settings
+  sync_interval: 1.0  # seconds
+  max_latency: 5.0  # seconds
+
+# =============================================================================
+# API INTEGRATIONS
+# =============================================================================
+api:
+  # StatsBomb
+  statsbomb:
+    enabled: true
+    base_url: "https://raw.githubusercontent.com/statsbomb/open-data/master/data/"
+    rate_limit: 100  # requests per minute
+    
+  # Football-data.org
+  football_data:
+    enabled: false
+    base_url: "https://api.football-data.org/v4/"
+    api_key: ""  # Set via FOOTBALL_DATA_API_KEY env var
+    rate_limit: 10
+    
+  # Custom API
+  custom:
+    enabled: false
+    base_url: ""
+    api_key: ""
+    timeout: 30
+
+# =============================================================================
+# TEAM COLORS & BRANDING
+# =============================================================================
+team_colors:
+  # Premier League
+  Liverpool: "#c8102e"
+  "Manchester City": "#6cabdd"
+  "Manchester United": "#da291c"
+  Chelsea: "#034694"
+  Arsenal: "#ef0107"
+  Tottenham: "#132257"
+  "Newcastle United": "#241f20"
+  "Aston Villa": "#95bfe5"
+  Brighton: "#0057b8"
+  "West Ham": "#7a263a"
+  
+  # La Liga
+  "Real Madrid": "#ffffff"
+  Barcelona: "#a50044"
+  "Atletico Madrid": "#cb3524"
+  Sevilla: "#ffffff"
+  
+  # Bundesliga
+  "Bayern Munich": "#dc052d"
+  "Borussia Dortmund": "#fde100"
+  "Bayer Leverkusen": "#e32219"
+  
+  # Serie A
+  Juventus: "#ffffff"
+  Inter: "#010e80"
+  Milan: "#fb090b"
+  Napoli: "#12a0d7"
+  
+  # Default
+  default_home: "#e63946"
+  default_away: "#4361ee"
+
+# =============================================================================
+# EXPORT SETTINGS
+# =============================================================================
+export:
+  # Video
+  video:
+    formats: ["mp4", "avi", "mov", "webm"]
+    default_format: "mp4"
+    codecs:
+      mp4: "h264"
+      avi: "xvid"
+      mov: "prores"
+      webm: "vp9"
+      
+  # Data
+  data:
+    formats: ["json", "csv", "xlsx", "pdf"]
+    default_format: "json"
+    include_metadata: true
+    include_raw_data: false
+    
+  # Reports
+  report:
+    template: "default"
+    include_charts: true
+    include_heatmaps: true
+    include_video_clips: false
+
+# =============================================================================
+# SECURITY SETTINGS
+# =============================================================================
+security:
+  # Authentication
+  auth_enabled: false
+  jwt_secret: ""  # Set via JWT_SECRET env var
+  token_expiry: 3600  # seconds
+  
+  # API Keys
+  api_key_header: "X-API-Key"
+  
+  # CORS
+  cors_origins:
+    - "http://localhost:8501"
+    - "http://localhost:3000"
+  
+  # Rate Limiting
+  rate_limit_enabled: true
+  rate_limit_requests: 100
+  rate_limit_window: 60  # seconds
+
+# =============================================================================
+# PERFORMANCE TUNING
+# =============================================================================
+performance:
+  # Memory
+  max_memory_usage: "4GB"
+  garbage_collection_interval: 300  # seconds
+  
+  # CPU
+  cpu_affinity: []  # Empty = all cores
+  process_priority: "normal"  # low, normal, high
+  
+  # Caching
+  cache_enabled: true
+  cache_size: "1GB"
+  cache_ttl: 3600  # seconds
+  
+  # Parallel processing
+  max_workers: 4
+  thread_pool_size: 8
+
+# =============================================================================
+# DEVELOPMENT SETTINGS
+# =============================================================================
+development:
+  # Hot reload
+  hot_reload: false
+  
+  # Debugging
+  debug_mode: false
+  verbose_logging: false
+  profile_performance: false
+  
+  # Testing
+  test_data_path: "tests/data/"
+  mock_external_apis: true
+  
+  # Documentation
+  auto_generate_docs: false
+  docs_port: 8080
+
+# =============================================================================
+# ENVIRONMENT VARIABLES OVERRIDE
+# =============================================================================
+# The following environment variables can override config values:
+#
+# TACTIVISION_DEBUG - Set to "true" to enable debug mode
+# TACTIVISION_LOG_LEVEL - Override log level
+# TACTIVISION_DB_PATH - Override database path
+# TACTIVISION_DASHBOARD_PORT - Override dashboard port
+# FOOTBALL_DATA_API_KEY - API key for football-data.org
+# JWT_SECRET - Secret for JWT token generation
+# CUDA_VISIBLE_DEVICES - Specify GPU devices to use
+# =============================================================================
