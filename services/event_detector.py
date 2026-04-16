@@ -33,14 +33,20 @@ class EventDetector:
 
     def __init__(
         self,
-        min_velocity_mps: float = 2.0,
-        min_distance_m: float = 5.0,
-        max_distance_m: float = 45.0,
-        shot_velocity_threshold_mps: float = 5.0,
+        min_velocity_mps: float = 1.0,  # Lowered from 2.0 for better sensitivity
+        min_distance_m: float = 3.0,    # Lowered from 5.0 to catch short passes
+        max_distance_m: float = 60.0,   # Increased from 45.0 for long balls
+        shot_velocity_threshold_mps: float = 3.0,  # Lowered from 4.0 for better sensitivity
         shot_max_velocity_mps: float = 200.0,
-        shot_angle_threshold_deg: float = 30.0,
-        possession_memory_sec: float = 1.0
+        shot_angle_threshold_deg: float = 45.0,  # Increased from 35.0 for wider detection
+        possession_memory_sec: float = 2.0,  # Increased from 1.5 for better shot attribution
+        pass_cooldown_frames: int = 5,  # New: prevent duplicate pass detection
+        goal_detection_frames: int = 60,  # Frames to look for goal after shot
+        goal_line_buffer_px: float = 50.0,  # Buffer zone for goal line detection
+        
+        
     ):
+
         """
         Initialize the event detector.
         
@@ -75,10 +81,18 @@ class EventDetector:
         self.last_possession_player: Optional[int] = None
         self.last_possession_team: Optional[str] = None
         self.last_shot_frame: int = -100  # Cooldown to prevent duplicate shots
+        self.goal_detection_frames = goal_detection_frames
+        self.goal_line_buffer_px = goal_line_buffer_px
+        
+        # Track pending shots for goal detection
+        self._pending_shots: List[Dict[str, Any]] = []
+        self._recent_ball_positions: List[Dict[str, Any]] = []  # Track ball positions for goal detection
 
         # Event history
         self.pass_events: List[Dict[str, Any]] = []
         self.shot_events: List[Dict[str, Any]] = []
+        self.goal_events: List[Dict[str, Any]] = []  # Track detected goals
+        self.score: Dict[str, int] = {'A': 0, 'B': 0}  # Track score by team
 
         # Pass statistics
         self.total_passes = 0
@@ -102,6 +116,13 @@ class EventDetector:
         self.team_shots = {'A': 0, 'B': 0}
         self.player_shots: Dict[int, int] = {}
         self.shot_velocities: List[float] = []
+        
+        # Goal statistics
+        self.total_goals = 0
+        self.team_goals = {'A': 0, 'B': 0}
+        self.player_goals: Dict[int, int] = {}
+        
+    
 
     def detect_pass(
         self,
@@ -186,6 +207,164 @@ class EventDetector:
                                 player_positions, ball_velocity_mps, timestamp)
 
         return pass_event
+    
+    
+    
+    def detect_tackle(
+        self,
+        player_positions: Dict[int, Tuple[float, float, str]],
+        ball_position: Tuple[float, float],
+        current_possessor: Optional[int],
+        previous_possessor: Optional[int],
+        frame_idx: int,
+        timestamp: float,
+        meter_per_px: float
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Detect tackle events when possession changes due to defensive action.
+        
+        A tackle is detected when:
+        1. Possession changes between teams
+        2. Two players from opposing teams were close together
+        3. Ball velocity is relatively low (not a pass)
+        """
+        if current_possessor is None or previous_possessor is None:
+            return None
+            
+        if current_possessor == previous_possessor:
+            return None
+            
+        # Get team info
+        curr_info = player_positions.get(current_possessor)
+        prev_info = player_positions.get(previous_possessor)
+        
+        if not curr_info or not prev_info:
+            return None
+            
+        curr_team = curr_info[2]
+        prev_team = prev_info[2]
+        
+        # Must be different teams (not just different players on same team)
+        if curr_team == prev_team or curr_team == 'REF' or prev_team == 'REF':
+            return None
+            
+        # Check if players were close (within 3 meters)
+        distance_px = np.sqrt(
+            (curr_info[0] - prev_info[0]) ** 2 +
+            (curr_info[1] - prev_info[1]) ** 2
+        )
+        distance_m = distance_px * meter_per_px
+        
+        if distance_m > 3.0:  # Too far for a tackle
+            return None
+            
+        # Ball velocity should be low (not a pass)
+        if self.last_ball_velocity_mps > 3.0:
+            return None
+            
+        tackle_event = {
+            'type': 'tackle',
+            'frame': frame_idx,
+            'timestamp': timestamp,
+            'tackler_id': current_possessor,
+            'tackler_team': curr_team,
+            'tackled_id': previous_possessor,
+            'tackled_team': prev_team,
+            'position': (curr_info[0], curr_info[1]),
+            'success': True
+        }
+        
+        self.tackle_events.append(tackle_event)
+        return tackle_event
+
+    def detect_interception(
+        self,
+        player_positions: Dict[int, Tuple[float, float, str]],
+        ball_position: Tuple[float, float],
+        ball_velocity_mps: float,
+        current_possessor: Optional[int],
+        previous_possessor: Optional[int],
+        frame_idx: int,
+        timestamp: float,
+        meter_per_px: float
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Detect interception events when a pass is cut off.
+        
+        An interception is detected when:
+        1. Ball was moving fast (indicating a pass)
+        2. Possession changes to opposing team
+        3. New possessor wasn't the intended target
+        """
+        if current_possessor is None or previous_possessor is None:
+            return None
+            
+        curr_info = player_positions.get(current_possessor)
+        prev_info = player_positions.get(previous_possessor)
+        
+        if not curr_info or not prev_info:
+            return None
+            
+        curr_team = curr_info[2]
+        prev_team = prev_info[2]
+        
+        # Must be different teams
+        if curr_team == prev_team or curr_team == 'REF' or prev_team == 'REF':
+            return None
+            
+        # Ball must have been moving (pass attempt)
+        if ball_velocity_mps < 2.0:
+            return None
+            
+        # Distance should be significant (not a tackle)
+        distance_px = np.sqrt(
+            (curr_info[0] - prev_info[0]) ** 2 +
+            (curr_info[1] - prev_info[1]) ** 2
+        )
+        distance_m = distance_px * meter_per_px
+        
+        if distance_m < 3.0:  # Too close, probably a tackle
+            return None
+            
+        interception_event = {
+            'type': 'interception',
+            'frame': frame_idx,
+            'timestamp': timestamp,
+            'interceptor_id': current_possessor,
+            'interceptor_team': curr_team,
+            'passer_id': previous_possessor,
+            'passer_team': prev_team,
+            'position': (curr_info[0], curr_info[1]),
+            'ball_velocity': ball_velocity_mps
+        }
+        
+        self.interception_events.append(interception_event)
+        return interception_event
+
+    def get_defensive_stats(self) -> Dict[str, Any]:
+        """Get defensive action statistics."""
+        tackles_by_team = {'A': 0, 'B': 0}
+        interceptions_by_team = {'A': 0, 'B': 0}
+        
+        for tackle in self.tackle_events:
+            team = tackle.get('tackler_team')
+            if team in tackles_by_team:
+                tackles_by_team[team] += 1
+                
+        for interception in self.interception_events:
+            team = interception.get('interceptor_team')
+            if team in interceptions_by_team:
+                interceptions_by_team[team] += 1
+        
+        return {
+            'total_tackles': len(self.tackle_events),
+            'tackles_by_team': tackles_by_team,
+            'total_interceptions': len(self.interception_events),
+            'interceptions_by_team': interceptions_by_team,
+            'tackle_events': self.tackle_events,
+            'interception_events': self.interception_events
+        }
+
 
     def detect_shot(
         self,
@@ -307,12 +486,16 @@ class EventDetector:
             'type': 'shot',
             'shooter_id': self.last_possession_player,
             'shooter_team': self.last_possession_team,
+            'team': self.last_possession_team,
             'velocity_mps': round(ball_velocity_mps, 2),
             'angle_to_goal_deg': round(angle_deg, 1),
             'distance_to_goal_px': round(distance_to_goal_px, 1),
             'ball_position': (round(ball_x, 1), round(ball_y, 1)),
+            'position': (round(ball_x, 1), round(ball_y, 1)),
+            'start_pos': (round(ball_x, 1), round(ball_y, 1)),
             'frame': frame_idx,
-            'timestamp': round(timestamp, 3)
+            'timestamp': round(timestamp, 3),
+            'is_goal': False  # Will be updated by xG calculator or manual review
         }
         
         self._record_shot(shot_event)
@@ -423,6 +606,169 @@ class EventDetector:
         self.player_shots[shooter_id] += 1
         
         self.shot_velocities.append(velocity)
+        
+        # Add to pending shots for goal detection
+        shot_event['pending_goal_check'] = True
+        shot_event['frames_since_shot'] = 0
+        self._pending_shots.append(shot_event)
+        
+    def update_ball_position_for_goal_detection(
+        self,
+        ball_position: Optional[Tuple[float, float]],
+        ball_velocity_mps: float,
+        frame_idx: int,
+        timestamp: float,
+        frame_width: int,
+        frame_height: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Update ball position and check for goals.
+        
+        Goal detection logic:
+        1. Ball crosses goal line (with buffer)
+        2. Ball velocity decreases significantly (indicates net collision)
+        3. Ball stays in goal area for multiple frames
+        
+        Returns:
+            Goal event dict if goal detected, None otherwise
+        """
+        if ball_position is None:
+            return None
+            
+        # Store recent ball position
+        self._recent_ball_positions.append({
+            'position': ball_position,
+            'velocity': ball_velocity_mps,
+            'frame': frame_idx,
+            'timestamp': timestamp
+        })
+        
+        # Keep only recent positions
+        max_history = self.goal_detection_frames
+        if len(self._recent_ball_positions) > max_history:
+            self._recent_ball_positions = self._recent_ball_positions[-max_history:]
+        
+        # Check for goals from pending shots
+        goal_event = None
+        for shot in self._pending_shots[:]:
+            shot['frames_since_shot'] += 1
+            
+            # Check if ball crossed goal line
+            if self._check_goal_line_crossing(
+                ball_position, shot['shooter_team'], frame_width, frame_height
+            ):
+                # Check if ball velocity decreased (indicates net collision)
+                if ball_velocity_mps < 2.0:  # Ball slowed down significantly
+                    goal_event = self._record_goal(shot, frame_idx, timestamp)
+                    self._pending_shots.remove(shot)
+                    break
+            
+            # Remove old pending shots
+            if shot['frames_since_shot'] > self.goal_detection_frames:
+                self._pending_shots.remove(shot)
+        
+        return goal_event
+    
+    def _check_goal_line_crossing(
+        self,
+        ball_position: Tuple[float, float],
+        shooting_team: str,
+        frame_width: int,
+        frame_height: int
+    ) -> bool:
+        """
+        Check if ball has crossed the goal line.
+        
+        Args:
+            ball_position: Current ball (x, y) position
+            shooting_team: Team that took the shot ('A' or 'B')
+            frame_width: Frame width in pixels
+            frame_height: Frame height in pixels
+            
+        Returns:
+            True if ball crossed goal line, False otherwise
+        """
+        ball_x, ball_y = ball_position
+        
+        # Goal dimensions (approximate for standard pitch)
+        goal_y_center = frame_height / 2
+        goal_half_height = frame_height * 0.15  # Goal is about 30% of frame height
+        goal_y_min = goal_y_center - goal_half_height
+        goal_y_max = goal_y_center + goal_half_height
+        
+        # Check if ball is within goal height
+        if not (goal_y_min <= ball_y <= goal_y_max):
+            return False
+        
+        # Team A attacks right (goal at x=width), Team B attacks left (goal at x=0)
+        buffer = self.goal_line_buffer_px
+        if shooting_team == 'A':
+            # Ball should be near right edge (goal)
+            return ball_x >= frame_width - buffer
+        else:  # Team B
+            # Ball should be near left edge (goal)
+            return ball_x <= buffer
+    
+    def _record_goal(
+        self,
+        shot_event: Dict[str, Any],
+        frame_idx: int,
+        timestamp: float
+    ) -> Dict[str, Any]:
+        """
+        Record a goal event.
+        
+        Args:
+            shot_event: The shot event that resulted in a goal
+            frame_idx: Current frame number
+            timestamp: Current timestamp
+            
+        Returns:
+            Goal event dict
+        """
+        shooter_id = shot_event['shooter_id']
+        shooter_team = shot_event['shooter_team']
+        
+        # Update shot event
+        shot_event['is_goal'] = True
+        
+        # Update statistics
+        self.total_goals += 1
+        if shooter_team in self.team_goals:
+            self.team_goals[shooter_team] += 1
+        
+        if shooter_id not in self.player_goals:
+            self.player_goals[shooter_id] = 0
+        self.player_goals[shooter_id] += 1
+        
+        # Update score
+        self.score[shooter_team] = self.score.get(shooter_team, 0) + 1
+        
+        goal_event = {
+            'type': 'goal',
+            'scorer_id': shooter_id,
+            'scorer_team': shooter_team,
+            'frame': frame_idx,
+            'timestamp': round(timestamp, 3),
+            'shot_velocity_mps': shot_event.get('velocity_mps', 0),
+            'score': self.score.copy()
+        }
+        
+        self.goal_events.append(goal_event)
+        
+        return goal_event
+    
+    def get_goal_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive goal statistics."""
+        return {
+            'total_goals': self.total_goals,
+            'team_goals': self.team_goals.copy(),
+            'player_goals': {
+                pid: count for pid, count in self.player_goals.items()
+            },
+            'score': self.score.copy(),
+            'goal_events': self.goal_events.copy()
+        }
 
     def get_pass_events(self) -> List[Dict[str, Any]]:
         """Get all detected pass events."""
@@ -539,6 +885,10 @@ class EventDetector:
         self.last_possession_team = None
         self.last_shot_frame = -100
         
+        # Goal detection state
+        self._pending_shots.clear()
+        self._recent_ball_positions.clear()
+        
         # Pass events and stats
         self.pass_events.clear()
         self.total_passes = 0
@@ -559,3 +909,10 @@ class EventDetector:
         self.team_shots = {'A': 0, 'B': 0}
         self.player_shots.clear()
         self.shot_velocities.clear()
+        
+        # Goal events and stats
+        self.goal_events.clear()
+        self.total_goals = 0
+        self.team_goals = {'A': 0, 'B': 0}
+        self.player_goals.clear()
+        self.score = {'A': 0, 'B': 0}

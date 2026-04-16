@@ -547,10 +547,13 @@ class TacticalHeatmapGenerator:
             self._team_heatmaps[team][py, px] += 1
 
             if player_id not in self._player_heatmaps:
-                height, width = self._team_heatmaps[team].shape
-                self._player_heatmaps[player_id] = np.zeros((height, width), dtype=np.float32)
+                # Cap at 30 player heatmaps to prevent OOM on long videos
+                if len(self._player_heatmaps) < 30:
+                    height, width = self._team_heatmaps[team].shape
+                    self._player_heatmaps[player_id] = np.zeros((height, width), dtype=np.float32)
 
-            self._player_heatmaps[player_id][py, px] += 1
+            if player_id in self._player_heatmaps:
+                self._player_heatmaps[player_id][py, px] += 1
 
     def get_team_heatmap(self, team: str, smoothed: bool = True) -> np.ndarray:
         """

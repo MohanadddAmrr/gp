@@ -349,42 +349,72 @@ def launch_dashboard(config: Optional[Dict] = None):
         return False
 
 
-def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
-                 enable_wearable: bool = False, enable_broadcast: bool = False,
-                 enable_export: bool = False, enable_streaming: bool = False,
-                 enable_social: bool = False, device: str = 'cpu'):
+def process_video(video_path: str, roster_path: str = None, output_dir: str = None,
+                   config: dict = None, team_a_name: str = None, team_b_name: str = None):
 
-    
-    if not Path(video_path).exists():
+    video_path = Path(video_path)
+    if not video_path.exists():
         print_error(f"Video file not found: {video_path}")
         return False
-    
+
+    if output_dir is None:
+        output_dir = f"outputs/{video_path.stem}"
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
     print_info(f"Processing: {video_path}")
-    
-    if roster_path:
+
+    if team_a_name and team_b_name:
+        print_info(f"Teams: {team_a_name} vs {team_b_name}")
+    elif roster_path:
         print_info(f"Using roster: {roster_path}")
-    
-    if output_dir:
-        print_info(f"Output directory: {output_dir}")
-    
+
+    print_info(f"Output directory: {output_dir}")
+
     try:
         # Import processing modules
         from demo.run_demo import process_video as run_processing
-        
+        from ultralytics import YOLO
+        from services.database_manager import DatabaseManager
+
+        # Load model
+        model = YOLO("yolov8n.pt")
+
+        # Initialize database
+        db_manager = DatabaseManager()
+
+        # Extract chunk settings from config
+        chunk_size = 5.0
+        mem_limit = 80.0
+        if config and "video" in config:
+            chunk_size = config["video"].get("chunk_size_minutes", 5.0)
+            mem_limit = config["video"].get("memory_limit_percent", 80.0)
+
         # Run processing
-        result = run_processing(video_path, roster_path, output_dir)
-        
+        result = run_processing(
+            video_path, model,
+            db_manager=db_manager,
+            chunk_size_minutes=chunk_size,
+            memory_limit_percent=mem_limit,
+            team_a_name=team_a_name,
+            team_b_name=team_b_name,
+        )
+
         if result:
             print_success("Video processing completed!")
             return True
         else:
             print_error("Video processing failed!")
             return False
-            
+
+    except ImportError:
+        print_error("Processing pipeline not found. Please ensure demo/run_demo.py exists.")
+        return False
     except Exception as e:
         print_error(f"Processing error: {e}")
         logger.exception("Video processing failed")
         return False
+
 
 
 def run_tests(test_type: str = "all"):
@@ -431,8 +461,13 @@ def export_data(match_id: int, format_type: str, output_path: str):
             print_success(f"Exported to: {export_path}")
             return True
         elif format_type == "csv":
-            print_info("CSV export not yet implemented")
-            return False
+            data = db.get_match_data(match_id)
+            import pandas as pd
+            df = pd.DataFrame(data)
+            df.to_csv(output_path, index=False)
+            print_success(f"Exported to: {output_path}")
+            return True
+
         else:
             print_error(f"Unknown format: {format_type}")
             return False
@@ -489,6 +524,72 @@ def show_status():
     print_info(f"  Total: {total // (2**30)} GB")
 
 
+def batch_process_matches(config: dict = None):
+    """Batch process all match videos in a directory."""
+    print_header("Batch Process Matches")
+
+    input_dir = input("Enter path to directory containing match videos: ").strip()
+    if not input_dir:
+        print_error("No directory provided.")
+        return False
+
+    roster_path = input("Enter roster JSON path (or press Enter to skip): ").strip() or None
+
+    try:
+        from services.batch_processor import BatchProcessor
+        from services.database_manager import DatabaseManager
+
+        db_manager = DatabaseManager()
+        db_manager.initialize_database()
+
+        processor = BatchProcessor(config=config, db_manager=db_manager)
+        videos = processor.scan_directory(input_dir)
+
+        if not videos:
+            print_error(f"No video files found in {input_dir}")
+            return False
+
+        total = len(videos)
+        print_info(f"Found {total} video(s) to process")
+
+        def progress_cb(current, total_count, filename):
+            bar_len = 30
+            filled = int(bar_len * current / total_count)
+            bar = "=" * filled + ">" + " " * (bar_len - filled - 1)
+            print(f"\r  [{bar}] {current}/{total_count} matches", end="", flush=True)
+
+        result = processor.process_batch(input_dir, roster_path=roster_path, progress_callback=progress_cb)
+
+        # Print summary table
+        print("\n")
+        print_header("Batch Results")
+        print(f"  {'Filename':<35} {'Status':<10} {'Time':<10} {'Events':<10} {'Possession'}")
+        print(f"  {'-' * 35} {'-' * 10} {'-' * 10} {'-' * 10} {'-' * 15}")
+        for mr in result.match_results:
+            status = "OK" if mr.success else "FAILED"
+            poss = f"{mr.possession_a}%-{mr.possession_b}%" if mr.success else "-"
+            events = str(mr.events_detected) if mr.success else "-"
+            t = f"{mr.processing_time_s}s"
+            print(f"  {mr.filename:<35} {status:<10} {t:<10} {events:<10} {poss}")
+
+        # Generate summary file
+        summary_path = processor.generate_summary(result)
+        print_success(f"Batch summary saved to: {summary_path}")
+
+        return True
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        return False
+    except ImportError as e:
+        print_error(f"Missing module: {e}")
+        return False
+    except Exception as e:
+        print_error(f"Batch processing error: {e}")
+        logger.exception("Batch processing failed")
+        return False
+
+
 def interactive_menu():
     """Show interactive menu."""
     while True:
@@ -500,12 +601,13 @@ def interactive_menu():
         print("  4. 📊 System Status")
         print("  5. ⚙️  Setup Wizard")
         print("  6. 📤 Export Data")
-        print("  7. ❌ Exit")
-        
-        choice = input("\nEnter your choice (1-7): ").strip()
-        
+        print("  7. 📂 Batch Process Matches")
+        print("  8. ❌ Exit")
+
+        choice = input("\nEnter your choice (1-8): ").strip()
+
         config = load_config()
-        
+
         if choice == "1":
             launch_dashboard(config)
         elif choice == "2":
@@ -527,6 +629,8 @@ def interactive_menu():
             output_path = input("Enter output path: ").strip()
             export_data(match_id, format_type, output_path)
         elif choice == "7":
+            batch_process_matches(config)
+        elif choice == "8":
             print_info("Goodbye!")
             break
         else:
@@ -572,7 +676,7 @@ Examples:
     
     parser.add_argument(
         '--mode',
-        choices=['menu', 'dashboard', 'process', 'test', 'status', 'setup', 'export'],
+        choices=['menu', 'dashboard', 'process', 'batch', 'test', 'status', 'setup', 'export'],
         default='menu',
         help='Operation mode (default: menu)'
     )
@@ -595,6 +699,18 @@ Examples:
         help='Output directory (for process mode)'
     )
     
+    parser.add_argument(
+        '--team-a',
+        type=str,
+        help='Team A name (for process mode, skips roster JSON lookup)'
+    )
+
+    parser.add_argument(
+        '--team-b',
+        type=str,
+        help='Team B name (for process mode, skips roster JSON lookup)'
+    )
+
     parser.add_argument(
         '--test-type',
         choices=['all', 'ball', 'possession', 'unit'],
@@ -622,6 +738,12 @@ Examples:
         help='Path to configuration file (default: config.yaml)'
     )
     
+    parser.add_argument(
+        '--batch-dir',
+        type=str,
+        help='Directory of video files (for batch mode)'
+    )
+
     parser.add_argument(
         '--debug',
         action='store_true',
@@ -655,7 +777,11 @@ def main():
         if not args.video:
             print_error("--video is required for process mode")
             sys.exit(1)
-        success = process_video(args.video, args.roster, args.output, config)
+        success = process_video(
+            args.video, args.roster, args.output, config,
+            team_a_name=getattr(args, 'team_a', None),
+            team_b_name=getattr(args, 'team_b', None),
+        )
         sys.exit(0 if success else 1)
     elif args.mode == 'test':
         success = run_tests(args.test_type)
@@ -664,6 +790,22 @@ def main():
         show_status()
     elif args.mode == 'setup':
         setup_wizard()
+    elif args.mode == 'batch':
+        if not args.batch_dir:
+            print_error("--batch-dir is required for batch mode")
+            sys.exit(1)
+        try:
+            from services.batch_processor import BatchProcessor
+            from services.database_manager import DatabaseManager
+            db_manager = DatabaseManager()
+            db_manager.initialize_database()
+            processor = BatchProcessor(config=config, db_manager=db_manager)
+            result = processor.process_batch(args.batch_dir, roster_path=args.roster)
+            processor.generate_summary(result)
+            sys.exit(0 if result.total_failed == 0 else 1)
+        except Exception as e:
+            print_error(f"Batch processing error: {e}")
+            sys.exit(1)
     elif args.mode == 'export':
         if args.match_id is None:
             print_error("--match-id is required for export mode")

@@ -8,14 +8,6 @@ ENHANCEMENTS:
 2. Tactical zones - Track possession in Defensive/Midfield/Attacking thirds
 3. Duration analysis - Categorize possessions as Short/Medium/Long
 4. Enhanced context - Provides rich tactical insights for coaches
-
-WHY THESE ENHANCEMENTS MATTER:
-- Pressure: Shows defensive intensity, helps identify when team struggles under press
-- Zones: Reveals where team builds attacks, defensive vs attacking style
-- Duration: Shows playing style (quick direct play vs patient build-up)
-
-KEY INSIGHT:
-Possession = player closest to ball (within threshold distance)
 """
 
 from typing import List, Tuple, Optional, Dict, Any
@@ -26,7 +18,6 @@ from collections import deque
 class PossessionTracker:
     """
     Tracks ball possession by identifying the closest player to the ball.
-    
     ENHANCED with tactical context: pressure, zones, duration analysis.
     """
 
@@ -50,21 +41,23 @@ class PossessionTracker:
         # Historical data
         self.possession_history: List[Dict[str, Any]] = []
 
-        # Statistics
-        self.team_possession_time: Dict[str, float] = {'A': 0.0, 'B': 0.0}
+        # Statistics - include REF to handle referee detections
+        self.team_possession_time: Dict[str, float] = {'A': 0.0, 'B': 0.0, 'REF': 0.0, 'unknown': 0.0}
         self.player_possession_time: Dict[int, float] = {}
         self.player_touch_count: Dict[int, int] = {}
 
         # Last processed frame to avoid duplicates
         self.last_frame_idx: Optional[int] = None
-        
-        # NEW: Tactical context tracking
+
+        # Tactical context tracking
         self.zone_possession_time = {
             'A': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0},
-            'B': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0}
+            'B': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0},
+            'REF': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0},
+            'unknown': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0}
         }
-        self.pressure_events = []  # Track high-pressure possessions
-        self.possession_durations = []  # Track all possession durations
+        self.pressure_events = []
+        self.possession_durations = []
         self.zone_changes = 0
         self.last_zone = None
 
@@ -87,7 +80,6 @@ class PossessionTracker:
         Returns:
             Tuple of (player_id, team, distance) if possession detected, None otherwise
         """
-        # Skip if we already processed this frame
         if frame_idx == self.last_frame_idx:
             if self.current_possessor is not None:
                 return (self.current_possessor, self.current_team, 0.0)
@@ -98,7 +90,6 @@ class PossessionTracker:
         if not player_positions or ball_pos is None:
             return None
 
-        # Calculate distance from ball to each player
         min_distance = float('inf')
         closest_player = None
         closest_team = None
@@ -106,7 +97,6 @@ class PossessionTracker:
         ball_x, ball_y = ball_pos
 
         for player_id, (player_x, player_y, team) in player_positions.items():
-            # Euclidean distance formula: sqrt((x2-x1)^2 + (y2-y1)^2)
             distance = math.sqrt(
                 (player_x - ball_x) ** 2 +
                 (player_y - ball_y) ** 2
@@ -117,13 +107,10 @@ class PossessionTracker:
                 closest_player = player_id
                 closest_team = team
 
-        # Check if closest player is within threshold
         if min_distance <= self.distance_threshold:
-            # Possession detected
             new_possessor = closest_player
-            new_team = closest_team
+            new_team = closest_team if closest_team else 'unknown'
 
-            # Check if possession changed
             if new_possessor != self.current_possessor:
                 self._update_possession(
                     new_possessor,
@@ -134,9 +121,7 @@ class PossessionTracker:
 
             return (new_possessor, new_team, min_distance)
         else:
-            # Ball is loose (no player close enough)
             if self.current_possessor is not None:
-                # Possession ended
                 self._update_possession(None, None, frame_idx, timestamp)
 
             return None
@@ -148,31 +133,29 @@ class PossessionTracker:
         frame_idx: int,
         timestamp: float
     ) -> None:
-        """
-        Internal method to update possession state and log changes.
-        """
-        # Calculate duration of previous possession
+        """Internal method to update possession state and log changes."""
         if self.current_possessor is not None and self.possession_start_time is not None:
             duration = timestamp - self.possession_start_time
 
-            # Update team possession time
-            if self.current_team in self.team_possession_time:
-                self.team_possession_time[self.current_team] += duration
+            # Update team possession time (with safety check)
+            team_key = self.current_team if self.current_team in self.team_possession_time else 'unknown'
+            self.team_possession_time[team_key] += duration
 
             # Update player possession time
             if self.current_possessor not in self.player_possession_time:
                 self.player_possession_time[self.current_possessor] = 0.0
             self.player_possession_time[self.current_possessor] += duration
-            
-            # NEW: Track possession duration
-            self.possession_durations.append(duration)
-            
-            # NEW: Track zone possession time
-            if self.last_zone and self.current_team:
-                if self.last_zone in self.zone_possession_time[self.current_team]:
-                    self.zone_possession_time[self.current_team][self.last_zone] += duration
 
-            # Log possession event to history
+            # Track possession duration
+            self.possession_durations.append(duration)
+
+            # Track zone possession time (with safety checks)
+            if self.last_zone and self.current_team:
+                team_key = self.current_team if self.current_team in self.zone_possession_time else 'unknown'
+                if self.last_zone in self.zone_possession_time[team_key]:
+                    self.zone_possession_time[team_key][self.last_zone] += duration
+
+            # Log possession event
             event = {
                 'player_id': self.current_possessor,
                 'team': self.current_team,
@@ -184,17 +167,14 @@ class PossessionTracker:
             }
             self.possession_history.append(event)
 
-            # Limit history size
             if len(self.possession_history) > self.max_history:
                 self.possession_history.pop(0)
 
-        # Update current state
         self.current_possessor = new_possessor
         self.current_team = new_team
         self.possession_start_time = timestamp if new_possessor is not None else None
         self.possession_start_frame = frame_idx if new_possessor is not None else None
 
-        # Update touch count
         if new_possessor is not None:
             if new_possessor not in self.player_touch_count:
                 self.player_touch_count[new_possessor] = 0
@@ -210,14 +190,15 @@ class PossessionTracker:
 
     def get_possession_percentage(self) -> Dict[str, float]:
         """Calculate possession percentage for each team."""
-        total_time = sum(self.team_possession_time.values())
+        # Only count A and B for percentage (not REF or unknown)
+        total_time = self.team_possession_time.get('A', 0.0) + self.team_possession_time.get('B', 0.0)
 
         if total_time == 0:
             return {'A': 0.0, 'B': 0.0}
 
         return {
-            team: (time_val / total_time) * 100
-            for team, time_val in self.team_possession_time.items()
+            'A': (self.team_possession_time.get('A', 0.0) / total_time) * 100,
+            'B': (self.team_possession_time.get('B', 0.0) / total_time) * 100
         }
 
     def get_player_possession_stats(self) -> Dict[int, Dict[str, float]]:
@@ -246,10 +227,9 @@ class PossessionTracker:
             'current_possessor': self.current_possessor,
             'current_team': self.current_team,
             'possession_percentage': self.get_possession_percentage(),
-            'team_possession_time': self.team_possession_time.copy(),
+            'team_possession_time': {k: v for k, v in self.team_possession_time.items() if k in ['A', 'B']},
             'player_stats': self.get_player_possession_stats(),
             'total_events': len(self.possession_history),
-            # NEW: Enhanced metrics
             'zone_stats': self.get_zone_statistics(),
             'pressure_stats': self.get_pressure_statistics(),
             'duration_stats': self.get_duration_statistics(),
@@ -263,23 +243,20 @@ class PossessionTracker:
         self.possession_start_time = None
         self.possession_start_frame = None
         self.possession_history.clear()
-        self.team_possession_time = {'A': 0.0, 'B': 0.0}
+        self.team_possession_time = {'A': 0.0, 'B': 0.0, 'REF': 0.0, 'unknown': 0.0}
         self.player_possession_time.clear()
         self.player_touch_count.clear()
         self.last_frame_idx = None
-        # NEW
         self.zone_possession_time = {
             'A': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0},
-            'B': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0}
+            'B': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0},
+            'REF': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0},
+            'unknown': {'Defensive': 0.0, 'Midfield': 0.0, 'Attacking': 0.0}
         }
         self.pressure_events.clear()
         self.possession_durations.clear()
         self.zone_changes = 0
         self.last_zone = None
-
-    # ============================================================
-    # NEW: TACTICAL CONTEXT METHODS
-    # ============================================================
 
     def calculate_pressure(
         self,
@@ -289,79 +266,34 @@ class PossessionTracker:
         all_player_positions: Dict[int, Tuple[float, float, str]],
         pressure_threshold: float = 150.0
     ) -> int:
-        """
-        Calculate number of opponents pressuring the possessor.
-        
-        Pressure = opponents within threshold distance of ball carrier.
-        Key tactical metric showing defensive intensity.
-        
-        WHY PRESSURE MATTERS:
-        - High pressure = opponent playing aggressive defense
-        - Low pressure = team has space to build attacks
-        - Coaches use this to evaluate defensive effectiveness
-        
-        Args:
-            possessor_id: ID of player with possession
-            possessor_pos: Position of possessor (x, y)
-            possessor_team: Team of possessor ('A' or 'B')
-            all_player_positions: Dict of all player positions
-            pressure_threshold: Distance threshold for pressure (default: 150px ≈ 15m)
-            
-        Returns:
-            Number of opponents applying pressure (0-11)
-        """
+        """Calculate number of opponents pressuring the possessor."""
         pressure_count = 0
-        
+
         for player_id, (px, py, team) in all_player_positions.items():
-            # Skip possessor and teammates
             if player_id == possessor_id or team == possessor_team:
                 continue
-            
-            # Calculate distance to possessor
+
             distance = math.sqrt(
                 (px - possessor_pos[0]) ** 2 +
                 (py - possessor_pos[1]) ** 2
             )
-            
+
             if distance <= pressure_threshold:
                 pressure_count += 1
-        
+
         return pressure_count
-    
+
     def get_possession_zone(
         self,
         ball_pos: Tuple[float, float],
         possessor_team: str,
         frame_width: int
     ) -> str:
-        """
-        Determine which tactical zone the possession is in.
-        
-        Zones (for Team A attacking right):
-        - Team A: Defensive Third (left), Midfield (center), Attacking Third (right)
-        - Team B: Defensive Third (right), Midfield (center), Attacking Third (left)
-        
-        WHY ZONES MATTER:
-        - Shows where team builds attacks
-        - "Possession in attacking third" = creating chances
-        - "Possession in defensive third" = building from back
-        - Coaches use this for tactical analysis
-        
-        Args:
-            ball_pos: Ball position (x, y)
-            possessor_team: Team in possession ('A' or 'B')
-            frame_width: Field width in pixels
-            
-        Returns:
-            Zone string: "Defensive", "Midfield", or "Attacking"
-        """
+        """Determine which tactical zone the possession is in."""
         x = ball_pos[0]
-        
-        # Divide field into thirds
         third = frame_width / 3.0
-        
+
         if possessor_team == 'A':
-            # Team A attacks right
             if x < third:
                 return "Defensive"
             elif x < 2 * third:
@@ -369,14 +301,13 @@ class PossessionTracker:
             else:
                 return "Attacking"
         else:
-            # Team B attacks left
             if x < third:
                 return "Attacking"
             elif x < 2 * third:
                 return "Midfield"
             else:
                 return "Defensive"
-    
+
     def detect_possession_with_context(
         self,
         ball_pos: Tuple[float, float],
@@ -386,58 +317,34 @@ class PossessionTracker:
         frame_width: int,
         frame_height: int
     ) -> Optional[Dict]:
-        """
-        Enhanced possession detection with tactical context.
-        
-        Returns possession info PLUS:
-        - Pressure count (how many opponents nearby)
-        - Tactical zone (Defensive/Midfield/Attacking)
-        - Duration of current possession
-        
-        This gives coaches rich tactical insights:
-        - "Team A has 70% possession in attacking third under high pressure"
-        - "Team B loses possession quickly when pressed"
-        
-        Args:
-            ball_pos: Ball position (x, y)
-            player_positions: Dict of player positions {id: (x, y, team)}
-            frame_idx: Current frame
-            timestamp: Current time
-            frame_width: Frame width
-            frame_height: Frame height
-            
-        Returns:
-            Dict with possession info and tactical context, or None
-        """
-        # Standard possession detection
+        """Enhanced possession detection with tactical context."""
         result = self.detect_possession(ball_pos, player_positions, frame_idx, timestamp)
-        
+
         if result is None:
             return None
-        
+
         player_id, team, distance = result
-        
-        # Calculate pressure
+
+        # Safety check for team
+        if team is None:
+            team = 'unknown'
+
         possessor_pos = player_positions[player_id][:2]
         pressure = self.calculate_pressure(
             player_id, possessor_pos, team, player_positions
         )
-        
-        # Get zone
+
         zone = self.get_possession_zone(ball_pos, team, frame_width)
-        
-        # Track zone possession time (if this is a new zone)
+
         if zone != self.last_zone and self.current_team is not None:
             if self.last_zone is not None:
                 self.zone_changes += 1
         self.last_zone = zone
-        
-        # Calculate duration of current possession
+
         duration = 0.0
         if self.possession_start_time is not None:
             duration = timestamp - self.possession_start_time
-        
-        # Track high pressure events (3+ opponents pressing)
+
         if pressure >= 3:
             self.pressure_events.append({
                 'frame': frame_idx,
@@ -447,7 +354,7 @@ class PossessionTracker:
                 'pressure_count': pressure,
                 'zone': zone
             })
-        
+
         return {
             'player_id': player_id,
             'team': team,
@@ -456,19 +363,14 @@ class PossessionTracker:
             'zone': zone,
             'duration': duration
         }
-    
+
     def get_zone_statistics(self) -> Dict:
-        """
-        Get possession statistics by tactical zone.
-        
-        Returns:
-            Dict with zone possession percentages for each team
-        """
+        """Get possession statistics by tactical zone."""
         stats = {}
-        
+
         for team in ['A', 'B']:
             total_time = sum(self.zone_possession_time[team].values())
-            
+
             if total_time > 0:
                 stats[team] = {
                     zone: (time / total_time) * 100
@@ -480,16 +382,11 @@ class PossessionTracker:
                     'Midfield': 0.0,
                     'Attacking': 0.0
                 }
-        
+
         return stats
-    
+
     def get_pressure_statistics(self) -> Dict:
-        """
-        Get statistics about possession under pressure.
-        
-        Returns:
-            Dict with pressure statistics
-        """
+        """Get statistics about possession under pressure."""
         if not self.pressure_events:
             return {
                 'total_high_pressure_events': 0,
@@ -497,27 +394,18 @@ class PossessionTracker:
                 'max_pressure_count': 0,
                 'pressure_events': []
             }
-        
+
         pressure_counts = [e['pressure_count'] for e in self.pressure_events]
-        
+
         return {
             'total_high_pressure_events': len(self.pressure_events),
             'avg_pressure_count': sum(pressure_counts) / len(pressure_counts),
             'max_pressure_count': max(pressure_counts),
-            'pressure_events': self.pressure_events[-20:]  # Last 20 events
+            'pressure_events': self.pressure_events[-20:]
         }
-    
+
     def get_duration_statistics(self) -> Dict:
-        """
-        Get statistics about possession durations.
-        
-        Reveals playing style:
-        - Short possessions (<2s) = direct, fast-paced play
-        - Long possessions (>5s) = patient build-up play
-        
-        Returns:
-            Dict with duration statistics
-        """
+        """Get statistics about possession durations."""
         if not self.possession_durations:
             return {
                 'avg_duration': 0.0,
@@ -531,22 +419,21 @@ class PossessionTracker:
                 'medium_pct': 0.0,
                 'long_pct': 0.0
             }
-        
+
         durations = self.possession_durations
-        
-        # Categorize possessions
+
         short = [d for d in durations if d < 2.0]
         medium = [d for d in durations if 2.0 <= d < 5.0]
         long = [d for d in durations if d >= 5.0]
-        
+
         return {
             'avg_duration': sum(durations) / len(durations),
             'max_duration': max(durations),
             'min_duration': min(durations),
             'total_possessions': len(durations),
-            'short_possessions': len(short),  # <2s
-            'medium_possessions': len(medium),  # 2-5s
-            'long_possessions': len(long),  # >5s
+            'short_possessions': len(short),
+            'medium_possessions': len(medium),
+            'long_possessions': len(long),
             'short_pct': (len(short) / len(durations)) * 100,
             'medium_pct': (len(medium) / len(durations)) * 100,
             'long_pct': (len(long) / len(durations)) * 100

@@ -20,6 +20,8 @@ SPEED CONTEXT:
 
 from typing import Dict, List, Optional, Tuple, Any
 
+MAX_REALISTIC_SPEED_MPS = 12.0
+
 
 class SprintDetector:
     """Detects and tracks player sprints based on speed thresholds."""
@@ -29,10 +31,12 @@ class SprintDetector:
         sprint_threshold_mps: float = 5.5,
         high_speed_threshold_mps: float = 7.0,
         min_sprint_duration_sec: float = 1.0,
+        max_realistic_speed_mps: float = MAX_REALISTIC_SPEED_MPS,
     ):
         self.sprint_threshold = sprint_threshold_mps
         self.high_speed_threshold = high_speed_threshold_mps
         self.min_sprint_duration = min_sprint_duration_sec
+        self.max_realistic_speed = max_realistic_speed_mps
 
         # Per-player sprint state
         self._active_sprints: Dict[int, Dict] = {}
@@ -58,6 +62,10 @@ class SprintDetector:
             team: Team label ('A' or 'B')
             position: (x, y) pixel position (optional)
         """
+        # Reject physically impossible speeds (tracking artifact)
+        if speed_mps > self.max_realistic_speed:
+            return
+
         state = self._active_sprints.get(player_id)
 
         if speed_mps >= self.sprint_threshold:
@@ -114,6 +122,10 @@ class SprintDetector:
     def get_player_sprints(self, player_id: int) -> List[Dict[str, Any]]:
         """Return sprint events for a specific player."""
         return [s for s in self._sprint_events if s["player_id"] == player_id]
+    
+    def get_player_sprint_count(self, player_id: int) -> int:
+        """Return the number of sprints for a specific player."""
+        return sum(1 for s in self._sprint_events if s["player_id"] == player_id)
 
     def get_statistics(self) -> Dict[str, Any]:
         """Compute aggregate sprint statistics."""

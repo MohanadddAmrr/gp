@@ -247,3 +247,76 @@ class TrackDeduplicator:
     def get_id_map(self) -> Dict[int, int]:
         """Return the raw -> canonical ID mapping."""
         return dict(self._id_map)
+
+    def cross_chunk_id_matching(
+        self,
+        ending_tracks: Dict[int, Tuple[float, float]],
+        starting_tracks: Dict[int, Tuple[float, float]],
+        max_distance: float = 100.0,
+    ) -> Dict[int, int]:
+        """
+        Match track IDs across chunk boundaries.
+
+        At the end of chunk N, record each canonical track's last position.
+        At the start of chunk N+1, new raw IDs appear. This method finds the
+        best assignment from new raw IDs to existing canonical IDs based on
+        position proximity.
+
+        Args:
+            ending_tracks: {canonical_id: (cx, cy)} from end of previous chunk
+            starting_tracks: {raw_id: (cx, cy)} from start of new chunk
+            max_distance: Maximum pixel distance to consider a match
+
+        Returns:
+            {new_raw_id: existing_canonical_id} for matched pairs
+        """
+        if not ending_tracks or not starting_tracks:
+            return {}
+
+        matches: Dict[int, int] = {}
+        used_canonical: Set[int] = set()
+
+        # Build list of (distance, new_raw_id, canonical_id) and greedily assign
+        candidates = []
+        for raw_id, (rx, ry) in starting_tracks.items():
+            for canon_id, (cx, cy) in ending_tracks.items():
+                dist = np.hypot(rx - cx, ry - cy)
+                if dist < max_distance:
+                    candidates.append((dist, raw_id, canon_id))
+
+        candidates.sort(key=lambda x: x[0])
+
+        used_raw: Set[int] = set()
+        for dist, raw_id, canon_id in candidates:
+            if raw_id in used_raw or canon_id in used_canonical:
+                continue
+            matches[raw_id] = canon_id
+            used_raw.add(raw_id)
+            used_canonical.add(canon_id)
+
+        return matches
+
+    def pre_seed_chunk(self, raw_to_canonical: Dict[int, int], positions: Dict[int, Tuple[float, float]], frame_idx: int):
+        """
+        Pre-seed the ID map at the start of a new chunk so that matched
+        raw IDs immediately resolve to their existing canonical IDs.
+
+        Args:
+            raw_to_canonical: {new_raw_id: canonical_id} from cross_chunk_id_matching
+            positions: {new_raw_id: (cx, cy)} positions of the new raw tracks
+            frame_idx: Current frame index
+        """
+        for raw_id, canon_id in raw_to_canonical.items():
+            self._id_map[raw_id] = canon_id
+            if canon_id in self._canonical_tracks:
+                self._canonical_tracks[canon_id]["raw_ids"].add(raw_id)
+                self._canonical_tracks[canon_id]["last_frame"] = frame_idx
+                if raw_id in positions:
+                    self._canonical_tracks[canon_id]["last_pos"] = positions[raw_id]
+
+    def get_ending_positions(self) -> Dict[int, Tuple[float, float]]:
+        """Return {canonical_id: last_pos} for all active canonical tracks."""
+        return {
+            cid: state["last_pos"]
+            for cid, state in self._canonical_tracks.items()
+        }

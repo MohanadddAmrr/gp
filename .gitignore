@@ -41,8 +41,26 @@ Thumbs.db
 *.mp4
 *.avi
 *.mov
-demo_outputs/
+*.mkv
+demo/demo_outputs/
+input_videos/
 *.pyc
+
+# Runtime / binary artifacts
+matches.db
+*.db-journal
+yolov8n.pt
+yolov8n.onnx
+*.onnx
+
+# Stray artifacts
+/1
+/_ul
+/_blueprint.txt
+/_extract_pdf.py
+/_build_*.py
+/_build_*.js
+feature_report.js
 
 # Jupyter
 .ipynb_checkpoints/
