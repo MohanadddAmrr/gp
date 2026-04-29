@@ -59,6 +59,45 @@ from services.video_exporter import VideoExporter, ExportConfig
 from services.streaming_handler import StreamingManager
 from services.social_export import SocialMediaExporter, SocialPlatform, SocialClip
 from services.ai_tactical_recommendations import AITacticalRecommendations, RecommendationPriority, RecommendationCategory
+from services.improved_tracker import build_tracker, SUPPORTED_ALGORITHMS
+
+try:
+    import yaml as _yaml  # PyYAML for reading config.yaml tracker switch
+except ImportError:  # pragma: no cover - keep run_demo working if PyYAML missing
+    _yaml = None
+
+
+def _load_tracker_algorithm(default: str = "bytetrack") -> str:
+    """Read detection.tracking.algorithm from config.yaml.
+
+    Falls back to `default` (current behavior, ByteTrack) if the file or key
+    is missing, or if PyYAML is not installed. Unknown values fall back to
+    the default with a printed warning so a typo does not crash the demo.
+    """
+    if _yaml is None:
+        return default
+    cfg_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    if not cfg_path.exists():
+        return default
+    try:
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            cfg = _yaml.safe_load(fh) or {}
+    except Exception as exc:  # noqa: BLE001
+        print(f"[!] Failed to read {cfg_path}: {exc}; defaulting to {default!r}.")
+        return default
+    algo = (
+        cfg.get("detection", {})
+        .get("tracking", {})
+        .get("algorithm", default)
+    )
+    algo = str(algo).strip().lower()
+    if algo not in SUPPORTED_ALGORITHMS:
+        print(
+            f"[!] Unknown tracker algorithm {algo!r} in config.yaml; "
+            f"falling back to {default!r}."
+        )
+        return default
+    return algo
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -376,7 +415,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                  enable_social: bool = False,
                  chunk_size_minutes: float = 0, memory_limit_percent: float = 80,
                  team_a_name: str = None, team_b_name: str = None,
-                 max_seconds: float = 0):
+                 max_seconds: float = 0, tracker=None):
     """Process a single video file with optional integration features.
 
     Args:
@@ -384,7 +423,14 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
         memory_limit_percent: Warn if process memory exceeds this % of system RAM.
         team_a_name: Optional explicit team A name (skips roster JSON lookup).
         team_b_name: Optional explicit team B name (skips roster JSON lookup).
+        tracker: Pre-built Tracker (M2). Defaults to ByteTrack if not supplied.
     """
+    # M2 fallback: maintain backwards compatibility for any caller that
+    # doesn't pass a pre-built tracker (tests, scripts, notebooks).
+    if tracker is None:
+        tracker = build_tracker("bytetrack", model)
+        print("Using tracker: bytetrack (default fallback)")
+
     print(f"\nProcessing: {video_path.name}")
     
     # Open video to get metadata
@@ -653,11 +699,9 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                 # Resize frame to 640x360 to reduce memory footprint
                 frame = cv2.resize(frame, (640, 360))
 
-                # Per-frame YOLO tracking
-                res_list = model.track(
+                # Per-frame YOLO tracking via config-selected algorithm (M2).
+                res_list = tracker.track(
                     source=frame,
-                    persist=True,
-                    tracker="bytetrack.yaml",
                     classes=[0, 32],
                     conf=0.3,
                     device='cpu',
@@ -1531,6 +1575,11 @@ def main():
     
     print("Loading YOLO model...")
     model = YOLO(MODEL_NAME)
+
+    # M2: pick tracker (bytetrack | botsort) from config.yaml; default bytetrack.
+    tracker_algorithm = _load_tracker_algorithm()
+    tracker = build_tracker(tracker_algorithm, model)
+    print(f"Using tracker: {tracker_algorithm}")
     
     if not VIDEO_DIR.exists():
         print(f"[!] VIDEO_DIR not found: {VIDEO_DIR}")
@@ -1582,7 +1631,8 @@ def main():
             enable_streaming=args.streaming,
             enable_social=args.social,
             chunk_size_minutes=args.chunk_size,
-            memory_limit_percent=args.memory_limit
+            memory_limit_percent=args.memory_limit,
+            tracker=tracker,
         )
         # Clear memory between videos
         clear_memory()
