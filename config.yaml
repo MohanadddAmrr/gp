@@ -50,6 +50,11 @@ detection:
     max_age: 30
     min_hits: 3
     iou_threshold: 0.3
+    # M3 — Jersey + Position Re-ID layer (sits between tracker output and
+    # TrackDeduplicator). Conservative thresholds to avoid false merges.
+    reid_enabled: true
+    reid_merge_distance_px: 120.0
+    reid_max_lost_frames: 30
   player_id:
     enabled: true
     use_face_recognition: false

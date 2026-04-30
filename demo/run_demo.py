@@ -60,11 +60,31 @@ from services.streaming_handler import StreamingManager
 from services.social_export import SocialMediaExporter, SocialPlatform, SocialClip
 from services.ai_tactical_recommendations import AITacticalRecommendations, RecommendationPriority, RecommendationCategory
 from services.improved_tracker import build_tracker, SUPPORTED_ALGORITHMS
+from services.reid_module import JerseyColorClassifier, JerseyPosReID, hex_to_hsv
 
 try:
     import yaml as _yaml  # PyYAML for reading config.yaml tracker switch
 except ImportError:  # pragma: no cover - keep run_demo working if PyYAML missing
     _yaml = None
+
+
+def _load_tracking_config() -> dict:
+    """Read the full detection.tracking section from config.yaml.
+
+    Returns an empty dict on any failure so callers can fall back to defaults
+    individually without crashing the demo.
+    """
+    if _yaml is None:
+        return {}
+    cfg_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    if not cfg_path.exists():
+        return {}
+    try:
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            cfg = _yaml.safe_load(fh) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+    return cfg.get("detection", {}).get("tracking", {}) or {}
 
 
 def _load_tracker_algorithm(default: str = "bytetrack") -> str:
@@ -415,7 +435,8 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                  enable_social: bool = False,
                  chunk_size_minutes: float = 0, memory_limit_percent: float = 80,
                  team_a_name: str = None, team_b_name: str = None,
-                 max_seconds: float = 0, tracker=None):
+                 max_seconds: float = 0, tracker=None,
+                 reid_layer=None, reid_classifier=None):
     """Process a single video file with optional integration features.
 
     Args:
@@ -793,8 +814,23 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
             cy = (y1 + y2) / 2.0
             
             if cls_id == PERSON_CLASS:
-                # Deduplicate track ID
-                pid = track_dedup.resolve(tid, (cx, cy), frame_idx)
+                # M3: Re-ID layer (jersey + position) refines raw track id
+                # before the position-only TrackDeduplicator safety net.
+                effective_tid = tid
+                if reid_layer is not None and reid_classifier is not None:
+                    x1i, y1i = max(int(x1), 0), max(int(y1), 0)
+                    x2i, y2i = max(int(x2), x1i + 1), max(int(y2), y1i + 1)
+                    crop = frame[y1i:y2i, x1i:x2i] if frame is not None else None
+                    effective_tid = reid_layer.resolve(
+                        raw_track_id=int(tid),
+                        position=(cx, cy),
+                        crop_bgr=crop,
+                        classifier=reid_classifier,
+                        frame_idx=frame_idx,
+                    )
+
+                # Deduplicate track ID (TrackDeduplicator stays as a safety net)
+                pid = track_dedup.resolve(effective_tid, (cx, cy), frame_idx)
                 
                 # Store for identity processing
                 frame_player_bboxes[pid] = (x1, y1, x2, y2)
@@ -1580,6 +1616,29 @@ def main():
     tracker_algorithm = _load_tracker_algorithm()
     tracker = build_tracker(tracker_algorithm, model)
     print(f"Using tracker: {tracker_algorithm}")
+
+    # M3: optional Jersey+Position Re-ID layer (default ON, conservative).
+    _tracking_cfg = _load_tracking_config()
+    reid_enabled = bool(_tracking_cfg.get("reid_enabled", True))
+    reid_layer = None
+    reid_classifier = None
+    if reid_enabled:
+        reid_layer = JerseyPosReID(
+            merge_distance_px=float(
+                _tracking_cfg.get("reid_merge_distance_px", 120.0)
+            ),
+            max_lost_frames=int(
+                _tracking_cfg.get("reid_max_lost_frames", 30)
+            ),
+        )
+        reid_classifier = JerseyColorClassifier()
+        print(
+            "Re-ID: enabled "
+            f"(merge<{reid_layer.merge_distance_px:.0f}px, "
+            f"lost<{reid_layer.max_lost_frames}f)"
+        )
+    else:
+        print("Re-ID: disabled (TrackDeduplicator only)")
     
     if not VIDEO_DIR.exists():
         print(f"[!] VIDEO_DIR not found: {VIDEO_DIR}")
@@ -1633,6 +1692,8 @@ def main():
             chunk_size_minutes=args.chunk_size,
             memory_limit_percent=args.memory_limit,
             tracker=tracker,
+            reid_layer=reid_layer,
+            reid_classifier=reid_classifier,
         )
         # Clear memory between videos
         clear_memory()
