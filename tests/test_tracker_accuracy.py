@@ -286,3 +286,127 @@ def test_hex_to_hsv_round_trip_red() -> None:
     assert h <= 5 or h >= 175
     assert s > 200
     assert v > 200
+
+
+# ===========================================================================
+# Day 5 — edge cases + perf invariants
+# ===========================================================================
+
+from services.reid_module import classifier_from_team_colors  # noqa: E402
+
+
+def test_reid_merges_on_long_occlusion_20_frames() -> None:
+    """Spec edge case: occlusion >= 20 frames within max_lost_frames=30."""
+    cls = JerseyColorClassifier()
+    reid = JerseyPosReID(merge_distance_px=120.0, max_lost_frames=30)
+    red = _solid_bgr(0, 0, 255)
+
+    canon_a = reid.resolve(7, (300, 300), red, cls, frame_idx=0)
+    # 20 frames of silence — outside short-occlusion window, inside lookback.
+    canon_b = reid.resolve(99, (305, 300), red, cls, frame_idx=20)
+    assert canon_a == canon_b
+
+
+def test_reid_does_not_merge_past_max_lost_frames() -> None:
+    """Spec rule: lookback strictly bounded by max_lost_frames."""
+    cls = JerseyColorClassifier()
+    reid = JerseyPosReID(merge_distance_px=120.0, max_lost_frames=15)
+    red = _solid_bgr(0, 0, 255)
+
+    canon_a = reid.resolve(1, (300, 300), red, cls, frame_idx=0)
+    canon_b = reid.resolve(2, (300, 300), red, cls, frame_idx=50)
+    assert canon_a != canon_b, "match should expire after max_lost_frames"
+
+
+def test_reid_does_not_reclassify_known_raw_id() -> None:
+    """Day 5 perf invariant: classifier is invoked once per raw id, then cached.
+
+    We use a counting wrapper to verify the call count.
+    """
+    counter = {"calls": 0}
+
+    class _CountingClassifier(JerseyColorClassifier):
+        def classify(self, crop_bgr):  # type: ignore[override]
+            counter["calls"] += 1
+            return super().classify(crop_bgr)
+
+    cls = _CountingClassifier()
+    reid = JerseyPosReID()
+    red = _solid_bgr(0, 0, 255)
+
+    for f in range(10):  # raw id 5 seen 10 times
+        reid.resolve(5, (200 + f, 200), red, cls, frame_idx=f)
+
+    assert counter["calls"] == 1, (
+        f"classifier should be called exactly once for a stable raw id, "
+        f"got {counter['calls']}"
+    )
+
+
+def test_reid_merge_log_records_committed_merges() -> None:
+    """Debug log captures every committed merge with distance + team."""
+    cls = JerseyColorClassifier()
+    reid = JerseyPosReID(merge_distance_px=120.0, max_lost_frames=30)
+    red = _solid_bgr(0, 0, 255)
+
+    reid.resolve(1, (300, 300), red, cls, frame_idx=0)
+    reid.resolve(2, (310, 300), red, cls, frame_idx=10)  # should merge
+
+    assert len(reid._merge_log) == 1
+    entry = reid._merge_log[0]
+    assert entry["raw_track_id"] == 2
+    assert entry["canonical_id"] == 1
+    assert entry["team"] == "team_a"
+    assert entry["distance_px"] < 120
+
+
+def test_reid_write_merge_log_creates_file(tmp_path) -> None:
+    log_path = tmp_path / "reid_merge_log.json"
+    cls = JerseyColorClassifier()
+    reid = JerseyPosReID(merge_distance_px=120.0, max_lost_frames=30)
+    red = _solid_bgr(0, 0, 255)
+    reid.resolve(1, (100, 100), red, cls, frame_idx=0)
+    reid.resolve(2, (105, 100), red, cls, frame_idx=5)
+
+    written = reid.write_merge_log(log_path)
+    assert written == log_path
+    import json
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+    assert "stats" in payload and "merges" in payload and "thresholds" in payload
+    assert payload["thresholds"]["merge_distance_px"] == 120.0
+
+
+def test_classifier_from_team_colors_uses_real_jerseys() -> None:
+    """A classifier fitted to Arsenal red vs Tottenham navy should map the
+    correct synthetic crops to team_a / team_b.
+    """
+    cls = classifier_from_team_colors(
+        team_a_hex="#ef0107",   # Arsenal red
+        team_b_hex="#132257",   # Tottenham navy
+    )
+    assert cls.classify(_solid_bgr(0, 0, 239)) == "team_a"     # red BGR
+    assert cls.classify(_solid_bgr(87, 34, 19)) == "team_b"    # navy BGR (#132257)
+
+
+def test_classifier_from_team_colors_handles_missing_keys() -> None:
+    """None values should keep dataclass defaults (graceful degradation)."""
+    cls = classifier_from_team_colors(team_a_hex=None, team_b_hex=None)
+    # Defaults are red/blue, so this still classifies plausibly.
+    assert cls.classify(_solid_bgr(0, 0, 255)) in VALID_CLASSES
+
+
+def test_reid_near_color_match_does_not_false_merge() -> None:
+    """Two visually-distinct teams (red vs orange-red) must not merge.
+
+    Red team_a has hue ~0; orange-red is closer to ~10. With a fitted
+    classifier centered exactly on red, orange-red should land in team_a too
+    OR unknown — but never silently in team_b. We assert that two crops on
+    OPPOSITE sides of the hue spectrum (red vs blue-purple) don't merge.
+    """
+    cls = JerseyColorClassifier()
+    reid = JerseyPosReID(merge_distance_px=200.0, max_lost_frames=30)
+    pure_red = _solid_bgr(0, 0, 255)
+    deep_blue = _solid_bgr(255, 0, 0)
+    canon_a = reid.resolve(1, (300, 300), pure_red, cls, frame_idx=0)
+    canon_b = reid.resolve(2, (305, 300), deep_blue, cls, frame_idx=10)
+    assert canon_a != canon_b

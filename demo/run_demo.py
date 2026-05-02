@@ -60,7 +60,12 @@ from services.streaming_handler import StreamingManager
 from services.social_export import SocialMediaExporter, SocialPlatform, SocialClip
 from services.ai_tactical_recommendations import AITacticalRecommendations, RecommendationPriority, RecommendationCategory
 from services.improved_tracker import build_tracker, SUPPORTED_ALGORITHMS
-from services.reid_module import JerseyColorClassifier, JerseyPosReID, hex_to_hsv
+from services.reid_module import (
+    JerseyColorClassifier,
+    JerseyPosReID,
+    classifier_from_team_colors,
+    hex_to_hsv,
+)
 
 try:
     import yaml as _yaml  # PyYAML for reading config.yaml tracker switch
@@ -628,6 +633,22 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                 print(f"  Roster source: none (color clustering + OCR only)")
             identity_manager = PlayerIdentityManager(roster_path=roster_path, enable_ocr=True)
     
+    # M3: re-fit Re-ID jersey classifier from this match's team colors,
+    # so HSV centers reflect actual jerseys (not the module defaults).
+    if reid_layer is not None and _team_colors_cfg:
+        ta_hex = _team_colors_cfg.get(_resolved_ta) if _resolved_ta else None
+        tb_hex = _team_colors_cfg.get(_resolved_tb) if _resolved_tb else None
+        if ta_hex or tb_hex:
+            reid_classifier = classifier_from_team_colors(ta_hex, tb_hex)
+            print(
+                f"  Re-ID classifier fitted: team_a={_resolved_ta}={ta_hex}, "
+                f"team_b={_resolved_tb}={tb_hex}"
+            )
+
+    # M3: per-frame tracks buffer (Seif Contract A — services/accuracy_evaluator
+    # consumes demo_outputs/<stem>/per_frame_tracks.json on Day 8).
+    per_frame_tracks: list[dict] = []
+
     # Color ball detector
     color_ball_detector = ColorBallDetector()
     
@@ -807,6 +828,8 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
         frame_player_bboxes = {}
         frame_player_positions = {}  # For possession detection
         ball_box = None
+        # M3 Day 5: per-frame tracks accumulator for Seif's accuracy_evaluator.
+        frame_tracks: list[dict] = []
         
         for tid, box, cls_id in zip(ids, xyxy, cls_arr):
             x1, y1, x2, y2 = box
@@ -887,7 +910,29 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
             elif cls_id == BALL_CLASS:
                 ball_box = (x1, y1, x2, y2)
                 yolo_detections += 1
-        
+                # M3 Day 5: include ball in per-frame tracks (id is the raw tid).
+                frame_tracks.append({
+                    "track_id": int(tid),
+                    "bbox": [round(float(x1), 1), round(float(y1), 1),
+                             round(float(x2 - x1), 1), round(float(y2 - y1), 1)],
+                    "class": "ball",
+                    "conf": None,
+                })
+
+        # M3 Day 5: include all PERSON detections from this frame (collect after
+        # the loop so we have the resolved canonical pid). frame_player_bboxes
+        # holds the {pid: bbox} we just built.
+        for _pid, _bbox in frame_player_bboxes.items():
+            _x1, _y1, _x2, _y2 = _bbox
+            frame_tracks.append({
+                "track_id": int(_pid),
+                "bbox": [round(float(_x1), 1), round(float(_y1), 1),
+                         round(float(_x2 - _x1), 1), round(float(_y2 - _y1), 1)],
+                "class": "person",
+                "conf": None,
+            })
+        per_frame_tracks.append({"frame_idx": frame_idx, "tracks": frame_tracks})
+
         # End frame for deduplicator
         track_dedup.end_frame(frame_idx)
         
@@ -1498,6 +1543,35 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     
     with open(out_dir / "metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2, cls=NumpyEncoder)
+
+    # M3 Day 5: dump per-frame tracks JSON for Seif's services.accuracy_evaluator
+    # (Contract A from docs/HANDSHAKE_SEIF_GROUND_TRUTH.md). Always written
+    # regardless of reid_enabled so Seif's evaluator can compare both modes.
+    per_frame_tracks_payload = {
+        "video": video_path.name,
+        "fps": float(fps),
+        "frame_size": [int(width), int(height)],
+        "tracker": tracker.name if tracker is not None else "bytetrack",
+        "reid_enabled": bool(reid_layer is not None),
+        "frames": per_frame_tracks,
+    }
+    with open(out_dir / "per_frame_tracks.json", "w", encoding="utf-8") as f:
+        json.dump(per_frame_tracks_payload, f, cls=NumpyEncoder)
+    print(
+        f"  Dumped per_frame_tracks.json: {len(per_frame_tracks)} frames, "
+        f"{sum(len(fr['tracks']) for fr in per_frame_tracks)} total detections"
+    )
+
+    # M3 Day 5: persist Re-ID merge debug log when enabled.
+    if reid_layer is not None:
+        log_path = out_dir / "reid_merge_log.json"
+        reid_layer.write_merge_log(log_path)
+        s = reid_layer.stats()
+        print(
+            f"  Re-ID stats: {s['merges_committed']}/{s['merges_attempted']} merges, "
+            f"{s['canonical_count']} canonical from {s['raw_ids_seen']} raw "
+            f"(log: {log_path.name})"
+        )
     
     # Save to database if manager provided
     if db_manager is not None:

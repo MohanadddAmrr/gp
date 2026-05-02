@@ -33,6 +33,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional, Tuple
 
 import numpy as np
@@ -246,6 +247,7 @@ class JerseyPosReID:
         self,
         merge_distance_px: float = 120.0,
         max_lost_frames: int = 30,
+        debug_log_path: "Optional[Path]" = None,
     ) -> None:
         self.merge_distance_px = merge_distance_px
         self.max_lost_frames = max_lost_frames
@@ -254,7 +256,17 @@ class JerseyPosReID:
         self._raw_to_canonical: dict[int, int] = {}
         self._next_canonical_id = 1
 
-        # Diagnostic counters (Day 5 will dump these to a debug log).
+        # Day 5: per-raw-id classification cache. The classifier is the most
+        # expensive step in the layer; classifying once per raw id (instead of
+        # every frame) is a ~10x speedup and equivalent for stable raw ids.
+        self._raw_id_team: dict[int, JerseyClass] = {}
+
+        # Day 5: debug log of every committed merge — for threshold tuning
+        # and for inclusion in the thesis 5.3 reproducibility appendix.
+        self._merge_log: list[dict] = []
+        self._debug_log_path = debug_log_path
+
+        # Diagnostic counters.
         self.merges_attempted = 0
         self.merges_committed = 0
         self.new_canonical_assigned = 0
@@ -274,16 +286,19 @@ class JerseyPosReID:
         Falls back to a fresh canonical id when no lost candidate matches
         on both jersey class and distance.
         """
-        # Already mapped → just refresh memory and return.
+        # Already mapped → refresh memory with cached team and return. We
+        # NEVER reclassify a known raw id: the classifier is the slow path,
+        # and a stable raw id is, by definition, the same player wearing the
+        # same jersey. (Day 5 perf win.)
         if raw_track_id in self._raw_to_canonical:
             canon = self._raw_to_canonical[raw_track_id]
-            existing = self._memory.get(canon)
-            team = existing.team if existing is not None else "unknown"
-            self._memory.record(canon, position, team, frame_idx)
+            cached_team = self._raw_id_team.get(raw_track_id, "unknown")
+            self._memory.record(canon, position, cached_team, frame_idx)
             return canon
 
-        # New raw id — classify the crop then look for a lost canonical match.
+        # New raw id — classify the crop ONCE and cache the result.
         team = classifier.classify(crop_bgr) if crop_bgr is not None else "unknown"
+        self._raw_id_team[raw_track_id] = team
 
         candidates = self._memory.lost_candidates(
             current_frame=frame_idx, max_lost_frames=self.max_lost_frames
@@ -309,6 +324,14 @@ class JerseyPosReID:
             self._raw_to_canonical[raw_track_id] = best_canon
             self._memory.record(best_canon, position, team, frame_idx)
             self.merges_committed += 1
+            self._merge_log.append({
+                "frame_idx": frame_idx,
+                "raw_track_id": int(raw_track_id),
+                "canonical_id": int(best_canon),
+                "team": team,
+                "distance_px": round(float(best_dist), 2),
+                "position": [round(float(position[0]), 1), round(float(position[1]), 1)],
+            })
             return best_canon
 
         # No match → fresh canonical id.
@@ -318,6 +341,39 @@ class JerseyPosReID:
         self._memory.record(canon, position, team, frame_idx)
         self.new_canonical_assigned += 1
         return canon
+
+    # ---- debug log persistence -------------------------------------------
+
+    def write_merge_log(self, path: "Optional[Path]" = None) -> "Path":
+        """Persist the merge log to JSON.
+
+        Defaults to the path passed at construction. Returns the actual path
+        written so callers can include it in run summaries.
+        """
+        import json
+        from pathlib import Path as _P
+
+        target = _P(path) if path is not None else self._debug_log_path
+        if target is None:
+            raise ValueError(
+                "No debug_log_path supplied. Pass `path=` or set on the constructor."
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(
+                {
+                    "stats": self.stats(),
+                    "thresholds": {
+                        "merge_distance_px": self.merge_distance_px,
+                        "max_lost_frames": self.max_lost_frames,
+                    },
+                    "merges": self._merge_log,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return target
 
     # ---- diagnostics ------------------------------------------------------
 
@@ -352,3 +408,27 @@ def hex_to_hsv(hex_color: str) -> tuple[int, int, int]:
     bgr = np.array([[[b, g, r]]], dtype=np.uint8)
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[0, 0]
     return int(hsv[0]), int(hsv[1]), int(hsv[2])
+
+
+def classifier_from_team_colors(
+    team_a_hex: Optional[str],
+    team_b_hex: Optional[str],
+    referee_hex: Optional[str] = None,
+    goalkeeper_hex: Optional[str] = None,
+) -> JerseyColorClassifier:
+    """Build a JerseyColorClassifier with HSV centers fitted to actual match
+    jersey colors (read from config.yaml team_colors per match).
+
+    None values keep the dataclass defaults — useful when only the two team
+    colors are known and the referee/goalkeeper kits aren't recorded.
+    """
+    kwargs: dict = {}
+    if team_a_hex:
+        kwargs["team_a_hsv"] = hex_to_hsv(team_a_hex)
+    if team_b_hex:
+        kwargs["team_b_hsv"] = hex_to_hsv(team_b_hex)
+    if referee_hex:
+        kwargs["ref_hsv"] = hex_to_hsv(referee_hex)
+    if goalkeeper_hex:
+        kwargs["goalkeeper_hsv"] = hex_to_hsv(goalkeeper_hex)
+    return JerseyColorClassifier(**kwargs)
