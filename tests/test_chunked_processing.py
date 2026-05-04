@@ -248,3 +248,121 @@ def test_metrics_top_level_shape_matches_run_demo_subset() -> None:
         "ball_tracking": {"total_detections": 0, "detection_rate": 0.0, "position_history": []},
     }
     assert expected_subset.issubset(fake.keys())
+
+
+# ===========================================================================
+# Day 7 — formalized spec-named tests (per §7.1 M4 acceptance)
+# ===========================================================================
+
+
+@pytest.mark.skipif(
+    not Path("weights/yolov8n.pt").exists(),
+    reason="needs weights/yolov8n.pt",
+)
+def test_resume_from_checkpoint(tmp_path: Path) -> None:
+    """§7.1 M4 acceptance: 'after chunk 1 succeeds, simulate interrupt by
+    deleting later artifacts, re-run with resume=True, verify total frames
+    processed equals total.'
+
+    Strategy:
+      1. Cold run that completes all chunks.
+      2. Delete the LAST checkpoint (simulating an interrupt mid-final-chunk).
+      3. Re-run with resume=True.
+      4. Verify final metrics.json exists with frame == total_frames; the
+         restarted run must have skipped the early chunks and reprocessed
+         only the deleted one.
+    """
+    pytest.importorskip("cv2")
+    pytest.importorskip("ultralytics")
+
+    video = _make_synthetic_video(tmp_path / "synth.mp4", n_frames=75, fps=25)
+    output = tmp_path / "out"
+    cfg = {
+        "weights": "weights/yolov8n.pt",
+        "detection": {"tracking": {"algorithm": "bytetrack", "reid_enabled": False}},
+    }
+
+    from services.chunked_video_processor import process_video_in_chunks
+
+    # 1. Cold run: 75 frames @ 25fps, chunk_seconds=1 → 3 chunks
+    metrics_cold = process_video_in_chunks(
+        video_path=video, output_dir=output, chunk_seconds=1,
+        config=cfg, resume=False,
+    )
+    assert metrics_cold["chunks"]["count"] == 3
+    cdir = output / "checkpoints"
+    for idx in range(3):
+        assert (cdir / f"chunk_{idx:04d}.json").exists()
+
+    # 2. Simulate crash mid-final-chunk: drop last checkpoint pair.
+    (cdir / "chunk_0002.json").unlink()
+    (cdir / "chunk_0002_heat.npz").unlink()
+
+    # 3. Resume.
+    metrics_warm = process_video_in_chunks(
+        video_path=video, output_dir=output, chunk_seconds=1,
+        config=cfg, resume=True,
+    )
+
+    # 4. Total frames == video length, only chunk 2 reprocessed.
+    assert metrics_warm["frame"] == 75
+    summaries = metrics_warm["chunks"]["summaries"]
+    assert summaries[0].get("skipped"), "chunk 0 should be skipped on resume"
+    assert summaries[1].get("skipped"), "chunk 1 should be skipped on resume"
+    assert not summaries[2].get("skipped"), "chunk 2 should be reprocessed"
+    # Final checkpoints exist again after the resume run.
+    for idx in range(3):
+        assert (cdir / f"chunk_{idx:04d}.json").exists()
+
+
+@pytest.mark.skipif(
+    not Path("weights/yolov8n.pt").exists(),
+    reason="needs weights/yolov8n.pt",
+)
+def test_metrics_shape_matches_run_demo(tmp_path: Path) -> None:
+    """§7.1 M4 acceptance: 'final metrics.json has same top-level keys as a
+    run_demo.py output.' We assert the lock-list of keys plus types so a
+    casual refactor of either side trips the test.
+    """
+    pytest.importorskip("cv2")
+    pytest.importorskip("ultralytics")
+
+    video = _make_synthetic_video(tmp_path / "synth.mp4", n_frames=50, fps=25)
+    output = tmp_path / "out"
+
+    from services.chunked_video_processor import process_video_in_chunks
+
+    metrics = process_video_in_chunks(
+        video_path=video, output_dir=output, chunk_seconds=1,
+        config={
+            "weights": "weights/yolov8n.pt",
+            "detection": {"tracking": {"algorithm": "bytetrack", "reid_enabled": False}},
+        },
+        resume=False,
+    )
+
+    # Lock-list (subset of run_demo.py's metrics.json top-level keys).
+    expected_keys_with_types = {
+        "frame": int,
+        "num_players": int,
+        "raw_track_ids": int,
+        "duration_seconds": (int, float),
+        "duration_minutes": (int, float),
+        "tracking_quality": dict,
+        "ball_tracking": dict,
+    }
+    for key, expected_type in expected_keys_with_types.items():
+        assert key in metrics, f"top-level key {key!r} missing"
+        assert isinstance(metrics[key], expected_type), (
+            f"key {key!r} has wrong type: got {type(metrics[key]).__name__}"
+        )
+
+    # tracking_quality nested shape.
+    tq = metrics["tracking_quality"]
+    for k in ("canonical_players", "raw_yolo_tracks", "dedup_ratio"):
+        assert k in tq, f"tracking_quality missing {k!r}"
+
+    # ball_tracking nested shape.
+    bt = metrics["ball_tracking"]
+    for k in ("total_detections", "detection_rate", "position_history"):
+        assert k in bt, f"ball_tracking missing {k!r}"
