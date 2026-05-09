@@ -1,129 +1,5580 @@
 {
-  "frame": 750,
-  "fps": 25.0,
-  "num_players": 24,
-  "avg_step_px": 2.587528831965287,
-  "ball_detected": false,
+  "frame": 5823,
+  "num_players": 30,
+  "raw_track_ids": 239,
+  "ball_detected": true,
+  "fps": 48.52912860424232,
+  "duration_seconds": 119.9897910281242,
+  "duration_minutes": 2.0,
+  "tracking_quality": {
+    "canonical_players": 30,
+    "raw_yolo_tracks": 239,
+    "dedup_ratio": 0.13,
+    "identified_players": 13,
+    "inferred_players": 0
+  },
+  "player_identities": {
+    "1": {
+      "team": "A",
+      "number": 8,
+      "name": "Dominik Szoboszlai",
+      "position": "CM",
+      "display": "#8 Dominik Szoboszlai"
+    },
+    "129": {
+      "team": "A",
+      "number": 17,
+      "name": "Curtis Jones",
+      "position": "CM",
+      "display": "#17 Curtis Jones"
+    },
+    "142": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 142 (Tottenham Hotspur)"
+    },
+    "143": {
+      "team": "B",
+      "number": 5,
+      "name": "Pierre-Emile Hojbjerg",
+      "position": "DM",
+      "display": "#5 Pierre-Emile Hojbjerg"
+    },
+    "15": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 15 (Tottenham Hotspur)"
+    },
+    "16": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 16 (Tottenham Hotspur)"
+    },
+    "20": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 20 (Tottenham Hotspur)"
+    },
+    "28": {
+      "team": "A",
+      "number": 1,
+      "name": "Alisson Becker",
+      "position": "GK",
+      "display": "#1 Alisson Becker"
+    },
+    "161": {
+      "team": "B",
+      "number": 1,
+      "name": "Guglielmo Vicario",
+      "position": "GK",
+      "display": "#1 Guglielmo Vicario"
+    },
+    "41": {
+      "team": "A",
+      "number": 38,
+      "name": "Ryan Gravenberch",
+      "position": "DM",
+      "display": "#38 Ryan Gravenberch"
+    },
+    "42": {
+      "team": "B",
+      "number": 2,
+      "name": "Emerson Royal",
+      "position": "RB",
+      "display": "#2 Emerson Royal"
+    },
+    "171": {
+      "team": "A",
+      "number": 11,
+      "name": "Mohamed Salah",
+      "position": "RW",
+      "display": "#11 Mohamed Salah"
+    },
+    "180": {
+      "team": "A",
+      "number": 7,
+      "name": "Luis Diaz",
+      "position": "LW",
+      "display": "#7 Luis Diaz"
+    },
+    "55": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 55 (Liverpool)"
+    },
+    "185": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 185 (Liverpool)"
+    },
+    "65": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 65 (Tottenham Hotspur)"
+    },
+    "194": {
+      "team": "A",
+      "number": 2,
+      "name": "Joe Gomez",
+      "position": "CB",
+      "display": "#2 Joe Gomez"
+    },
+    "67": {
+      "team": "A",
+      "number": 71,
+      "name": null,
+      "position": null,
+      "display": "#71 (Liverpool)"
+    },
+    "68": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 68 (Liverpool)"
+    },
+    "78": {
+      "team": "A",
+      "number": 5,
+      "name": "Ibrahima Konate",
+      "position": "CB",
+      "display": "#5 Ibrahima Konate"
+    },
+    "211": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 211 (Liverpool)"
+    },
+    "213": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 213 (Liverpool)"
+    },
+    "220": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 220 (Liverpool)"
+    },
+    "221": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 221 (Tottenham Hotspur)"
+    },
+    "94": {
+      "team": "A",
+      "number": 3,
+      "name": "Wataru Endo",
+      "position": "DM",
+      "display": "#3 Wataru Endo"
+    },
+    "100": {
+      "team": "A",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 100 (Liverpool)"
+    },
+    "103": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 103 (Tottenham Hotspur)"
+    },
+    "105": {
+      "team": "A",
+      "number": 4,
+      "name": "Virgil van Dijk",
+      "position": "CB",
+      "display": "#4 Virgil van Dijk"
+    },
+    "111": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 111 (Tottenham Hotspur)"
+    },
+    "113": {
+      "team": "B",
+      "number": null,
+      "name": null,
+      "position": null,
+      "display": "Player 113 (Tottenham Hotspur)"
+    }
+  },
+  "player_stats": {
+    "1": {
+      "id": 1,
+      "team": "A",
+      "name": "Dominik Szoboszlai",
+      "display": "#8 Dominik Szoboszlai",
+      "jersey_number": 8,
+      "position": "CM",
+      "total_distance_m": 160.0,
+      "total_distance_km": 0.16,
+      "avg_speed_mps": 3.33,
+      "avg_speed_kmh": 12.0,
+      "max_speed_mps": 10.28,
+      "max_speed_kmh": 37.0,
+      "sprints": 0,
+      "high_intensity_runs": 1,
+      "passes_attempted": 1,
+      "passes_completed": 1,
+      "pass_accuracy": 100.0,
+      "passes_received": 3,
+      "key_passes": 0,
+      "interceptions": 1,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 1,
+      "possession_time_s": 0.1,
+      "frames_seen": 1258,
+      "minutes_played": 1.3,
+      "workload_score": 2.1
+    },
+    "129": {
+      "id": 129,
+      "team": "A",
+      "name": "Curtis Jones",
+      "display": "#17 Curtis Jones",
+      "jersey_number": 17,
+      "position": "CM",
+      "total_distance_m": 31.1,
+      "total_distance_km": 0.03,
+      "avg_speed_mps": 5.19,
+      "avg_speed_kmh": 18.7,
+      "max_speed_mps": 11.34,
+      "max_speed_kmh": 40.8,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 2,
+      "passes_completed": 1,
+      "pass_accuracy": 50.0,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 1,
+      "possession_time_s": 0.1,
+      "frames_seen": 169,
+      "minutes_played": 0.2,
+      "workload_score": 5.8
+    },
+    "142": {
+      "id": 142,
+      "team": "B",
+      "name": null,
+      "display": "Player 142 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 9.6,
+      "total_distance_km": 0.01,
+      "avg_speed_mps": 8.23,
+      "avg_speed_kmh": 29.6,
+      "max_speed_mps": 10.69,
+      "max_speed_kmh": 38.5,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 13,
+      "minutes_played": 0.0,
+      "workload_score": 0.9
+    },
+    "143": {
+      "id": 143,
+      "team": "B",
+      "name": "Pierre-Emile Hojbjerg",
+      "display": "#5 Pierre-Emile Hojbjerg",
+      "jersey_number": 5,
+      "position": "DM",
+      "total_distance_m": 2.1,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 5.61,
+      "avg_speed_kmh": 20.2,
+      "max_speed_mps": 10.68,
+      "max_speed_kmh": 38.4,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 31,
+      "minutes_played": 0.0,
+      "workload_score": 0.5
+    },
+    "15": {
+      "id": 15,
+      "team": "B",
+      "name": null,
+      "display": "Player 15 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 0,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 2.32,
+      "avg_speed_kmh": 8.3,
+      "max_speed_mps": 2.32,
+      "max_speed_kmh": 8.3,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0,
+      "frames_seen": 12,
+      "minutes_played": 0.0,
+      "workload_score": 0.0
+    },
+    "16": {
+      "id": 16,
+      "team": "B",
+      "name": null,
+      "display": "Player 16 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 0,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 0,
+      "avg_speed_kmh": 0.0,
+      "max_speed_mps": 0.0,
+      "max_speed_kmh": 0.0,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0,
+      "frames_seen": 9,
+      "minutes_played": 0.0,
+      "workload_score": 0.0
+    },
+    "20": {
+      "id": 20,
+      "team": "B",
+      "name": null,
+      "display": "Player 20 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 1.7,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 5.14,
+      "avg_speed_kmh": 18.5,
+      "max_speed_mps": 5.14,
+      "max_speed_kmh": 18.5,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0,
+      "frames_seen": 6,
+      "minutes_played": 0.0,
+      "workload_score": 0.0
+    },
+    "28": {
+      "id": 28,
+      "team": "A",
+      "name": "Alisson Becker",
+      "display": "#1 Alisson Becker",
+      "jersey_number": 1,
+      "position": "GK",
+      "total_distance_m": 910.0,
+      "total_distance_km": 0.91,
+      "avg_speed_mps": 2.22,
+      "avg_speed_kmh": 8.0,
+      "max_speed_mps": 6.94,
+      "max_speed_kmh": 25.0,
+      "sprints": 1,
+      "high_intensity_runs": 1,
+      "passes_attempted": 6,
+      "passes_completed": 6,
+      "pass_accuracy": 100.0,
+      "passes_received": 15,
+      "key_passes": 1,
+      "interceptions": 1,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 6,
+      "possession_time_s": 3.5,
+      "frames_seen": 13309,
+      "minutes_played": 13.7,
+      "workload_score": 14.6
+    },
+    "161": {
+      "id": 161,
+      "team": "B",
+      "name": "Guglielmo Vicario",
+      "display": "#1 Guglielmo Vicario",
+      "jersey_number": 1,
+      "position": "GK",
+      "total_distance_m": 48.0,
+      "total_distance_km": 0.05,
+      "avg_speed_mps": 5.78,
+      "avg_speed_kmh": 20.8,
+      "max_speed_mps": 11.05,
+      "max_speed_kmh": 39.8,
+      "sprints": 0,
+      "high_intensity_runs": 1,
+      "passes_attempted": 2,
+      "passes_completed": 2,
+      "pass_accuracy": 100.0,
+      "passes_received": 0,
+      "key_passes": 1,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 236,
+      "minutes_played": 0.2,
+      "workload_score": 9.0
+    },
+    "41": {
+      "id": 41,
+      "team": "A",
+      "name": "Ryan Gravenberch",
+      "display": "#38 Ryan Gravenberch",
+      "jersey_number": 38,
+      "position": "DM",
+      "total_distance_m": 360.0,
+      "total_distance_km": 0.36,
+      "avg_speed_mps": 3.33,
+      "avg_speed_kmh": 12.0,
+      "max_speed_mps": 10.28,
+      "max_speed_kmh": 37.0,
+      "sprints": 0,
+      "high_intensity_runs": 2,
+      "passes_attempted": 2,
+      "passes_completed": 2,
+      "pass_accuracy": 100.0,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 1,
+      "duels_total": 1,
+      "duels_won": 1,
+      "duel_success_rate": 100.0,
+      "touches": 2,
+      "possession_time_s": 0.3,
+      "frames_seen": 2434,
+      "minutes_played": 2.5,
+      "workload_score": 4.6
+    },
+    "42": {
+      "id": 42,
+      "team": "B",
+      "name": "Emerson Royal",
+      "display": "#2 Emerson Royal",
+      "jersey_number": 2,
+      "position": "RB",
+      "total_distance_m": 16.9,
+      "total_distance_km": 0.02,
+      "avg_speed_mps": 4.77,
+      "avg_speed_kmh": 17.2,
+      "max_speed_mps": 11.5,
+      "max_speed_kmh": 41.4,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 2,
+      "passes_completed": 1,
+      "pass_accuracy": 50.0,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 1,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 1,
+      "possession_time_s": 0.1,
+      "frames_seen": 127,
+      "minutes_played": 0.1,
+      "workload_score": 3.4
+    },
+    "171": {
+      "id": 171,
+      "team": "A",
+      "name": "Mohamed Salah",
+      "display": "#11 Mohamed Salah",
+      "jersey_number": 11,
+      "position": "RW",
+      "total_distance_m": 28.0,
+      "total_distance_km": 0.03,
+      "avg_speed_mps": 5.88,
+      "avg_speed_kmh": 21.2,
+      "max_speed_mps": 11.97,
+      "max_speed_kmh": 43.1,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 1,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 1,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 1,
+      "possession_time_s": 0.1,
+      "frames_seen": 179,
+      "minutes_played": 0.2,
+      "workload_score": 4.8
+    },
+    "180": {
+      "id": 180,
+      "team": "A",
+      "name": "Luis Diaz",
+      "display": "#7 Luis Diaz",
+      "jersey_number": 7,
+      "position": "LW",
+      "total_distance_m": 6.8,
+      "total_distance_km": 0.01,
+      "avg_speed_mps": 5.02,
+      "avg_speed_kmh": 18.1,
+      "max_speed_mps": 9.28,
+      "max_speed_kmh": 33.4,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 58,
+      "minutes_played": 0.1,
+      "workload_score": 1.2
+    },
+    "55": {
+      "id": 55,
+      "team": "A",
+      "name": null,
+      "display": "Player 55 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 4.1,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 3.1,
+      "avg_speed_kmh": 11.2,
+      "max_speed_mps": 7.14,
+      "max_speed_kmh": 25.7,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 26,
+      "minutes_played": 0.0,
+      "workload_score": 0.1
+    },
+    "185": {
+      "id": 185,
+      "team": "A",
+      "name": null,
+      "display": "Player 185 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 20.8,
+      "total_distance_km": 0.02,
+      "avg_speed_mps": 7.45,
+      "avg_speed_kmh": 26.8,
+      "max_speed_mps": 11.98,
+      "max_speed_kmh": 43.1,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 39,
+      "minutes_played": 0.0,
+      "workload_score": 1.5
+    },
+    "65": {
+      "id": 65,
+      "team": "B",
+      "name": null,
+      "display": "Player 65 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 14.3,
+      "total_distance_km": 0.01,
+      "avg_speed_mps": 9.14,
+      "avg_speed_kmh": 32.9,
+      "max_speed_mps": 10.59,
+      "max_speed_kmh": 38.1,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 10,
+      "minutes_played": 0.0,
+      "workload_score": 0.4
+    },
+    "194": {
+      "id": 194,
+      "team": "A",
+      "name": "Joe Gomez",
+      "display": "#2 Joe Gomez",
+      "jersey_number": 2,
+      "position": "CB",
+      "total_distance_m": 550.0,
+      "total_distance_km": 0.55,
+      "avg_speed_mps": 3.33,
+      "avg_speed_kmh": 12.0,
+      "max_speed_mps": 10.28,
+      "max_speed_kmh": 37.0,
+      "sprints": 1,
+      "high_intensity_runs": 3,
+      "passes_attempted": 3,
+      "passes_completed": 1,
+      "pass_accuracy": 33.3,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 1,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 1,
+      "possession_time_s": 0.7,
+      "frames_seen": 3660,
+      "minutes_played": 3.8,
+      "workload_score": 12.0
+    },
+    "67": {
+      "id": 67,
+      "team": "A",
+      "name": null,
+      "display": "#71 (Liverpool)",
+      "jersey_number": 71,
+      "position": null,
+      "total_distance_m": 18.9,
+      "total_distance_km": 0.02,
+      "avg_speed_mps": 5.5,
+      "avg_speed_kmh": 19.8,
+      "max_speed_mps": 11.1,
+      "max_speed_kmh": 40.0,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 160,
+      "minutes_played": 0.2,
+      "workload_score": 2.3
+    },
+    "68": {
+      "id": 68,
+      "team": "A",
+      "name": null,
+      "display": "Player 68 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 3.4,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 3.17,
+      "avg_speed_kmh": 11.4,
+      "max_speed_mps": 5.3,
+      "max_speed_kmh": 19.1,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0,
+      "frames_seen": 11,
+      "minutes_played": 0.0,
+      "workload_score": 0.0
+    },
+    "78": {
+      "id": 78,
+      "team": "A",
+      "name": "Ibrahima Konate",
+      "display": "#5 Ibrahima Konate",
+      "jersey_number": 5,
+      "position": "CB",
+      "total_distance_m": 220.0,
+      "total_distance_km": 0.22,
+      "avg_speed_mps": 3.33,
+      "avg_speed_kmh": 12.0,
+      "max_speed_mps": 10.28,
+      "max_speed_kmh": 37.0,
+      "sprints": 0,
+      "high_intensity_runs": 1,
+      "passes_attempted": 1,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 1,
+      "key_passes": 0,
+      "interceptions": 1,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 1485,
+      "minutes_played": 1.5,
+      "workload_score": 2.7
+    },
+    "211": {
+      "id": 211,
+      "team": "A",
+      "name": null,
+      "display": "Player 211 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 4.9,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 4.37,
+      "avg_speed_kmh": 15.7,
+      "max_speed_mps": 8.85,
+      "max_speed_kmh": 31.8,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 10,
+      "minutes_played": 0.0,
+      "workload_score": 0.3
+    },
+    "213": {
+      "id": 213,
+      "team": "A",
+      "name": null,
+      "display": "Player 213 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 19.7,
+      "total_distance_km": 0.02,
+      "avg_speed_mps": 8.6,
+      "avg_speed_kmh": 30.9,
+      "max_speed_mps": 11.73,
+      "max_speed_kmh": 42.2,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 87,
+      "minutes_played": 0.1,
+      "workload_score": 4.1
+    },
+    "220": {
+      "id": 220,
+      "team": "A",
+      "name": null,
+      "display": "Player 220 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 4.6,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 5.71,
+      "avg_speed_kmh": 20.5,
+      "max_speed_mps": 10.1,
+      "max_speed_kmh": 36.4,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 62,
+      "minutes_played": 0.1,
+      "workload_score": 0.9
+    },
+    "221": {
+      "id": 221,
+      "team": "B",
+      "name": null,
+      "display": "Player 221 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 0.2,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 1.75,
+      "avg_speed_kmh": 6.3,
+      "max_speed_mps": 3.42,
+      "max_speed_kmh": 12.3,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0,
+      "frames_seen": 4,
+      "minutes_played": 0.0,
+      "workload_score": 0.0
+    },
+    "94": {
+      "id": 94,
+      "team": "A",
+      "name": "Wataru Endo",
+      "display": "#3 Wataru Endo",
+      "jersey_number": 3,
+      "position": "DM",
+      "total_distance_m": 60.0,
+      "total_distance_km": 0.06,
+      "avg_speed_mps": 3.33,
+      "avg_speed_kmh": 12.0,
+      "max_speed_mps": 10.28,
+      "max_speed_kmh": 37.0,
+      "sprints": 0,
+      "high_intensity_runs": 1,
+      "passes_attempted": 1,
+      "passes_completed": 1,
+      "pass_accuracy": 100.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 1,
+      "possession_time_s": 0.1,
+      "frames_seen": 437,
+      "minutes_played": 0.5,
+      "workload_score": 1.1
+    },
+    "100": {
+      "id": 100,
+      "team": "A",
+      "name": null,
+      "display": "Player 100 (Liverpool)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 3.9,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 5.82,
+      "avg_speed_kmh": 20.9,
+      "max_speed_mps": 7.44,
+      "max_speed_kmh": 26.8,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 6,
+      "minutes_played": 0.0,
+      "workload_score": 0.1
+    },
+    "103": {
+      "id": 103,
+      "team": "B",
+      "name": null,
+      "display": "Player 103 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 6.3,
+      "total_distance_km": 0.01,
+      "avg_speed_mps": 4.25,
+      "avg_speed_kmh": 15.3,
+      "max_speed_mps": 11.98,
+      "max_speed_kmh": 43.1,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 31,
+      "minutes_played": 0.0,
+      "workload_score": 0.5
+    },
+    "105": {
+      "id": 105,
+      "team": "A",
+      "name": "Virgil van Dijk",
+      "display": "#4 Virgil van Dijk",
+      "jersey_number": 4,
+      "position": "CB",
+      "total_distance_m": 23.1,
+      "total_distance_km": 0.02,
+      "avg_speed_mps": 5.03,
+      "avg_speed_kmh": 18.1,
+      "max_speed_mps": 11.96,
+      "max_speed_kmh": 43.1,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 162,
+      "minutes_played": 0.2,
+      "workload_score": 4.2
+    },
+    "111": {
+      "id": 111,
+      "team": "B",
+      "name": null,
+      "display": "Player 111 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 15.3,
+      "total_distance_km": 0.02,
+      "avg_speed_mps": 7.15,
+      "avg_speed_kmh": 25.8,
+      "max_speed_mps": 11.31,
+      "max_speed_kmh": 40.7,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 0,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 56,
+      "minutes_played": 0.1,
+      "workload_score": 1.9
+    },
+    "113": {
+      "id": 113,
+      "team": "B",
+      "name": null,
+      "display": "Player 113 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "position": null,
+      "total_distance_m": 3.3,
+      "total_distance_km": 0.0,
+      "avg_speed_mps": 5.54,
+      "avg_speed_kmh": 19.9,
+      "max_speed_mps": 9.84,
+      "max_speed_kmh": 35.4,
+      "sprints": 0,
+      "high_intensity_runs": 0,
+      "passes_attempted": 0,
+      "passes_completed": 0,
+      "pass_accuracy": 0.0,
+      "passes_received": 0,
+      "key_passes": 0,
+      "interceptions": 1,
+      "duels_total": 0,
+      "duels_won": 0,
+      "duel_success_rate": 0.0,
+      "touches": 0,
+      "possession_time_s": 0.0,
+      "frames_seen": 16,
+      "minutes_played": 0.0,
+      "workload_score": 0.6
+    }
+  },
   "tracks": [
     {
-      "id": 4,
-      "total_distance_px": 1174.2920929763968,
-      "last_step_px": 1.5848692969878468
-    },
-    {
-      "id": 6,
-      "total_distance_px": 2313.2102616666384,
-      "last_step_px": 1.2390049530060776
-    },
-    {
-      "id": 24,
-      "total_distance_px": 1234.480641415363,
-      "last_step_px": 0.8155626936614562
-    },
-    {
-      "id": 31,
-      "total_distance_px": 2031.210518216834,
-      "last_step_px": 1.105000023325374
-    },
-    {
-      "id": 35,
-      "total_distance_px": 1593.015588367508,
-      "last_step_px": 2.1506690497756007
-    },
-    {
-      "id": 39,
-      "total_distance_px": 898.5996274137692,
-      "last_step_px": 4.083729296895565
-    },
-    {
-      "id": 48,
-      "total_distance_px": 2353.4925335196335,
-      "last_step_px": 4.260681238029215
-    },
-    {
-      "id": 59,
-      "total_distance_px": 872.8421857891834,
-      "last_step_px": 2.701241713156836
-    },
-    {
-      "id": 63,
-      "total_distance_px": 1487.9583422993605,
-      "last_step_px": 0.8688814082047608
-    },
-    {
-      "id": 82,
-      "total_distance_px": 680.3670926557867,
-      "last_step_px": 3.1490457062474206
-    },
-    {
-      "id": 89,
-      "total_distance_px": 854.9109677249021,
-      "last_step_px": 1.5513555633755862
-    },
-    {
-      "id": 90,
-      "total_distance_px": 630.7414354888894,
-      "last_step_px": 0.9970598333529183
-    },
-    {
-      "id": 94,
-      "total_distance_px": 750.5995582387185,
-      "last_step_px": 5.631477347703634
-    },
-    {
-      "id": 94,
-      "total_distance_px": 750.5995582387185,
-      "last_step_px": 5.631477347703634
-    },
-    {
-      "id": 96,
-      "total_distance_px": 599.9723373080386,
-      "last_step_px": 0.49263965584829517
-    },
-    {
-      "id": 101,
-      "total_distance_px": 750.5204851072862,
-      "last_step_px": 1.2011487471090705
-    },
-    {
-      "id": 105,
-      "total_distance_px": 402.50662572609986,
-      "last_step_px": 1.5006022448822307
-    },
-    {
-      "id": 110,
-      "total_distance_px": 703.5723105886957,
-      "last_step_px": 1.4987658378741189
-    },
-    {
-      "id": 119,
-      "total_distance_px": 566.6820383193539,
-      "last_step_px": 6.036041007307528
-    },
-    {
-      "id": 122,
-      "total_distance_px": 384.4612251886011,
-      "last_step_px": 0.4800313845451217
+      "id": 1,
+      "team": "A",
+      "name": "Dominik Szoboszlai",
+      "display": "#8 Dominik Szoboszlai",
+      "jersey_number": 8,
+      "total_distance_m": 163.5,
+      "total_distance_px": 996.6,
+      "avg_speed_mps": 4.62,
+      "max_speed_mps": 11.74,
+      "frames_seen": 1258,
+      "last_step_px": 0.0,
+      "workload_score": 29.9
     },
     {
       "id": 129,
-      "total_distance_px": 412.9409183932959,
-      "last_step_px": 5.080370046642147
+      "team": "A",
+      "name": "Curtis Jones",
+      "display": "#17 Curtis Jones",
+      "jersey_number": 17,
+      "total_distance_m": 31.1,
+      "total_distance_px": 189.8,
+      "avg_speed_mps": 5.19,
+      "max_speed_mps": 11.34,
+      "frames_seen": 169,
+      "last_step_px": 0.0,
+      "workload_score": 5.8
     },
     {
-      "id": 133,
-      "total_distance_px": 398.77522237004354,
-      "last_step_px": 2.6341933916730627
+      "id": 142,
+      "team": "B",
+      "name": null,
+      "display": "Player 142 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 9.6,
+      "total_distance_px": 58.4,
+      "avg_speed_mps": 8.23,
+      "max_speed_mps": 10.69,
+      "frames_seen": 13,
+      "last_step_px": 0.0,
+      "workload_score": 0.9
     },
     {
-      "id": 134,
-      "total_distance_px": 200.8158954356565,
-      "last_step_px": 4.886740122625632
+      "id": 143,
+      "team": "B",
+      "name": "Pierre-Emile Hojbjerg",
+      "display": "#5 Pierre-Emile Hojbjerg",
+      "jersey_number": 5,
+      "total_distance_m": 2.1,
+      "total_distance_px": 13.1,
+      "avg_speed_mps": 5.61,
+      "max_speed_mps": 10.68,
+      "frames_seen": 31,
+      "last_step_px": 0.0,
+      "workload_score": 0.5
     },
     {
-      "id": 137,
-      "total_distance_px": 52.76908811710993,
-      "last_step_px": 2.5201040572337554
+      "id": 15,
+      "team": "B",
+      "name": null,
+      "display": "Player 15 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 0,
+      "total_distance_px": 0.0,
+      "avg_speed_mps": 2.32,
+      "max_speed_mps": 2.32,
+      "frames_seen": 12,
+      "last_step_px": 0.0,
+      "workload_score": 0.0
+    },
+    {
+      "id": 16,
+      "team": "B",
+      "name": null,
+      "display": "Player 16 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 0,
+      "total_distance_px": 0.0,
+      "avg_speed_mps": 0,
+      "max_speed_mps": 0.0,
+      "frames_seen": 9,
+      "last_step_px": 0.0,
+      "workload_score": 0.0
+    },
+    {
+      "id": 20,
+      "team": "B",
+      "name": null,
+      "display": "Player 20 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 1.7,
+      "total_distance_px": 10.3,
+      "avg_speed_mps": 5.14,
+      "max_speed_mps": 5.14,
+      "frames_seen": 6,
+      "last_step_px": 0.0,
+      "workload_score": 0.0
+    },
+    {
+      "id": 28,
+      "team": "A",
+      "name": "Alisson Becker",
+      "display": "#1 Alisson Becker",
+      "jersey_number": 1,
+      "total_distance_m": 1918.2,
+      "total_distance_px": 11692.0,
+      "avg_speed_mps": 5.21,
+      "max_speed_mps": 11.96,
+      "frames_seen": 13309,
+      "last_step_px": 0.0,
+      "workload_score": 375.4
+    },
+    {
+      "id": 161,
+      "team": "B",
+      "name": "Guglielmo Vicario",
+      "display": "#1 Guglielmo Vicario",
+      "jersey_number": 1,
+      "total_distance_m": 48.0,
+      "total_distance_px": 292.6,
+      "avg_speed_mps": 5.78,
+      "max_speed_mps": 11.05,
+      "frames_seen": 236,
+      "last_step_px": 0.0,
+      "workload_score": 9.0
+    },
+    {
+      "id": 41,
+      "team": "A",
+      "name": "Ryan Gravenberch",
+      "display": "#38 Ryan Gravenberch",
+      "jersey_number": 38,
+      "total_distance_m": 367.0,
+      "total_distance_px": 2237.2,
+      "avg_speed_mps": 5.83,
+      "max_speed_mps": 11.99,
+      "frames_seen": 2434,
+      "last_step_px": 0.0,
+      "workload_score": 70.7
+    },
+    {
+      "id": 42,
+      "team": "B",
+      "name": "Emerson Royal",
+      "display": "#2 Emerson Royal",
+      "jersey_number": 2,
+      "total_distance_m": 16.9,
+      "total_distance_px": 102.8,
+      "avg_speed_mps": 4.77,
+      "max_speed_mps": 11.5,
+      "frames_seen": 127,
+      "last_step_px": 0.0,
+      "workload_score": 3.4
+    },
+    {
+      "id": 171,
+      "team": "A",
+      "name": "Mohamed Salah",
+      "display": "#11 Mohamed Salah",
+      "jersey_number": 11,
+      "total_distance_m": 28.0,
+      "total_distance_px": 170.4,
+      "avg_speed_mps": 5.88,
+      "max_speed_mps": 11.97,
+      "frames_seen": 179,
+      "last_step_px": 0.0,
+      "workload_score": 4.8
+    },
+    {
+      "id": 180,
+      "team": "A",
+      "name": "Luis Diaz",
+      "display": "#7 Luis Diaz",
+      "jersey_number": 7,
+      "total_distance_m": 6.8,
+      "total_distance_px": 41.3,
+      "avg_speed_mps": 5.02,
+      "max_speed_mps": 9.28,
+      "frames_seen": 58,
+      "last_step_px": 0.0,
+      "workload_score": 1.2
+    },
+    {
+      "id": 55,
+      "team": "A",
+      "name": null,
+      "display": "Player 55 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 4.1,
+      "total_distance_px": 25.2,
+      "avg_speed_mps": 3.1,
+      "max_speed_mps": 7.14,
+      "frames_seen": 26,
+      "last_step_px": 0.0,
+      "workload_score": 0.1
+    },
+    {
+      "id": 185,
+      "team": "A",
+      "name": null,
+      "display": "Player 185 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 20.8,
+      "total_distance_px": 126.9,
+      "avg_speed_mps": 7.45,
+      "max_speed_mps": 11.98,
+      "frames_seen": 39,
+      "last_step_px": 0.0,
+      "workload_score": 1.5
+    },
+    {
+      "id": 65,
+      "team": "B",
+      "name": null,
+      "display": "Player 65 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 14.3,
+      "total_distance_px": 87.3,
+      "avg_speed_mps": 9.14,
+      "max_speed_mps": 10.59,
+      "frames_seen": 10,
+      "last_step_px": 0.0,
+      "workload_score": 0.4
+    },
+    {
+      "id": 194,
+      "team": "A",
+      "name": "Joe Gomez",
+      "display": "#2 Joe Gomez",
+      "jersey_number": 2,
+      "total_distance_m": 610.7,
+      "total_distance_px": 3722.5,
+      "avg_speed_mps": 5.15,
+      "max_speed_mps": 11.97,
+      "frames_seen": 3660,
+      "last_step_px": 0.0,
+      "workload_score": 132.5
+    },
+    {
+      "id": 67,
+      "team": "A",
+      "name": null,
+      "display": "#71 (Liverpool)",
+      "jersey_number": 71,
+      "total_distance_m": 18.9,
+      "total_distance_px": 115.1,
+      "avg_speed_mps": 5.5,
+      "max_speed_mps": 11.1,
+      "frames_seen": 160,
+      "last_step_px": 0.0,
+      "workload_score": 2.3
+    },
+    {
+      "id": 68,
+      "team": "A",
+      "name": null,
+      "display": "Player 68 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 3.4,
+      "total_distance_px": 20.5,
+      "avg_speed_mps": 3.17,
+      "max_speed_mps": 5.3,
+      "frames_seen": 11,
+      "last_step_px": 0.0,
+      "workload_score": 0.0
+    },
+    {
+      "id": 78,
+      "team": "A",
+      "name": "Ibrahima Konate",
+      "display": "#5 Ibrahima Konate",
+      "jersey_number": 5,
+      "total_distance_m": 229.5,
+      "total_distance_px": 1398.6,
+      "avg_speed_mps": 5.72,
+      "max_speed_mps": 11.97,
+      "frames_seen": 1485,
+      "last_step_px": 0.0,
+      "workload_score": 47.6
+    },
+    {
+      "id": 211,
+      "team": "A",
+      "name": null,
+      "display": "Player 211 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 4.9,
+      "total_distance_px": 29.6,
+      "avg_speed_mps": 4.37,
+      "max_speed_mps": 8.85,
+      "frames_seen": 10,
+      "last_step_px": 0.0,
+      "workload_score": 0.3
+    },
+    {
+      "id": 213,
+      "team": "A",
+      "name": null,
+      "display": "Player 213 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 19.7,
+      "total_distance_px": 120.3,
+      "avg_speed_mps": 8.6,
+      "max_speed_mps": 11.73,
+      "frames_seen": 87,
+      "last_step_px": 0.0,
+      "workload_score": 4.1
+    },
+    {
+      "id": 220,
+      "team": "A",
+      "name": null,
+      "display": "Player 220 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 4.6,
+      "total_distance_px": 28.1,
+      "avg_speed_mps": 5.71,
+      "max_speed_mps": 10.1,
+      "frames_seen": 62,
+      "last_step_px": 0.0,
+      "workload_score": 0.9
+    },
+    {
+      "id": 221,
+      "team": "B",
+      "name": null,
+      "display": "Player 221 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 0.2,
+      "total_distance_px": 1.1,
+      "avg_speed_mps": 1.75,
+      "max_speed_mps": 3.42,
+      "frames_seen": 4,
+      "last_step_px": 0.0,
+      "workload_score": 0.0
+    },
+    {
+      "id": 94,
+      "team": "A",
+      "name": "Wataru Endo",
+      "display": "#3 Wataru Endo",
+      "jersey_number": 3,
+      "total_distance_m": 60.1,
+      "total_distance_px": 366.4,
+      "avg_speed_mps": 6.63,
+      "max_speed_mps": 11.99,
+      "frames_seen": 437,
+      "last_step_px": 0.0,
+      "workload_score": 11.3
+    },
+    {
+      "id": 100,
+      "team": "A",
+      "name": null,
+      "display": "Player 100 (Liverpool)",
+      "jersey_number": null,
+      "total_distance_m": 3.9,
+      "total_distance_px": 23.5,
+      "avg_speed_mps": 5.82,
+      "max_speed_mps": 7.44,
+      "frames_seen": 6,
+      "last_step_px": 0.0,
+      "workload_score": 0.1
+    },
+    {
+      "id": 103,
+      "team": "B",
+      "name": null,
+      "display": "Player 103 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 6.3,
+      "total_distance_px": 38.2,
+      "avg_speed_mps": 4.25,
+      "max_speed_mps": 11.98,
+      "frames_seen": 31,
+      "last_step_px": 0.0,
+      "workload_score": 0.5
+    },
+    {
+      "id": 105,
+      "team": "A",
+      "name": "Virgil van Dijk",
+      "display": "#4 Virgil van Dijk",
+      "jersey_number": 4,
+      "total_distance_m": 23.1,
+      "total_distance_px": 140.7,
+      "avg_speed_mps": 5.03,
+      "max_speed_mps": 11.96,
+      "frames_seen": 162,
+      "last_step_px": 0.0,
+      "workload_score": 4.2
+    },
+    {
+      "id": 111,
+      "team": "B",
+      "name": null,
+      "display": "Player 111 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 15.3,
+      "total_distance_px": 93.6,
+      "avg_speed_mps": 7.15,
+      "max_speed_mps": 11.31,
+      "frames_seen": 56,
+      "last_step_px": 0.0,
+      "workload_score": 1.9
+    },
+    {
+      "id": 113,
+      "team": "B",
+      "name": null,
+      "display": "Player 113 (Tottenham Hotspur)",
+      "jersey_number": null,
+      "total_distance_m": 3.3,
+      "total_distance_px": 20.2,
+      "avg_speed_mps": 5.54,
+      "max_speed_mps": 9.84,
+      "frames_seen": 16,
+      "last_step_px": 0.0,
+      "workload_score": 0.6
     }
-  ]
+  ],
+  "team_names": {
+    "A": "Liverpool",
+    "B": "Tottenham Hotspur"
+  },
+  "team_colors": {
+    "A": "#c8102e",
+    "B": "#FFFFFF"
+  },
+  "team_stats": {
+    "A": {
+      "name": "Liverpool",
+      "total_distance_km": 2.4,
+      "avg_distance_km": 0.13,
+      "total_passes": 17,
+      "passes_completed": 12,
+      "pass_accuracy": 70.6,
+      "total_shots": 2,
+      "shots_on_target": 1,
+      "xg": 1.07,
+      "total_sprints": 1,
+      "total_interceptions": 5,
+      "total_duels": 2,
+      "duels_won": 1,
+      "total_touches": 13
+    },
+    "B": {
+      "name": "Tottenham Hotspur",
+      "total_distance_km": 0.1,
+      "avg_distance_km": 0.01,
+      "total_passes": 4,
+      "passes_completed": 3,
+      "pass_accuracy": 75.0,
+      "total_shots": 2,
+      "shots_on_target": 0,
+      "xg": 0.45,
+      "total_sprints": 1,
+      "total_interceptions": 2,
+      "total_duels": 0,
+      "duels_won": 0,
+      "total_touches": 1
+    }
+  },
+  "score": {
+    "A": 0,
+    "B": 0
+  },
+  "possession": {
+    "team_possession_percentage": {
+      "A": 65.0,
+      "B": 35.0
+    },
+    "total_frames": 477
+  },
+  "pass_detection": {
+    "total_passes": 25,
+    "total_attempted": 52,
+    "pass_accuracy": 48.1,
+    "passes_by_team": {
+      "A": 25,
+      "B": 0
+    },
+    "pass_directions": {
+      "forward": 7,
+      "backward": 4,
+      "diagonal_forward": 4,
+      "lateral": 4,
+      "diagonal_backward": 6
+    },
+    "interceptions": 27,
+    "key_passes": 4,
+    "player_passes": {
+      "1": {
+        "attempted": 1,
+        "completed": 1,
+        "accuracy": 100.0,
+        "key_passes": 0
+      },
+      "129": {
+        "attempted": 2,
+        "completed": 1,
+        "accuracy": 50.0,
+        "key_passes": 0
+      },
+      "28": {
+        "attempted": 6,
+        "completed": 6,
+        "accuracy": 100.0,
+        "key_passes": 1
+      },
+      "161": {
+        "attempted": 2,
+        "completed": 2,
+        "accuracy": 100.0,
+        "key_passes": 1
+      },
+      "41": {
+        "attempted": 2,
+        "completed": 2,
+        "accuracy": 100.0,
+        "key_passes": 0
+      },
+      "42": {
+        "attempted": 2,
+        "completed": 1,
+        "accuracy": 50.0,
+        "key_passes": 0
+      },
+      "171": {
+        "attempted": 1,
+        "completed": 0,
+        "accuracy": 0.0,
+        "key_passes": 0
+      },
+      "194": {
+        "attempted": 3,
+        "completed": 1,
+        "accuracy": 33.3,
+        "key_passes": 0
+      },
+      "78": {
+        "attempted": 1,
+        "completed": 0,
+        "accuracy": 0.0,
+        "key_passes": 0
+      },
+      "94": {
+        "attempted": 1,
+        "completed": 1,
+        "accuracy": 100.0,
+        "key_passes": 0
+      }
+    }
+  },
+  "shot_detection": {
+    "total_shots": 4,
+    "shots_by_team": {
+      "A": 2,
+      "B": 2
+    },
+    "shots_on_target": {
+      "A": 1,
+      "B": 0
+    },
+    "player_shots": {}
+  },
+  "sprint_detection": {
+    "total_sprints": 2,
+    "sprints_by_team": {
+      "A": 1,
+      "B": 1
+    },
+    "avg_sprint_speed_kmh": 39.9,
+    "avg_sprint_distance_m": 18.6
+  },
+  "xg_analysis": {
+    "total_xg": 1.52,
+    "xg_by_team": {
+      "A": {
+        "xg": 1.07,
+        "goals": 0,
+        "shots": 2
+      },
+      "B": {
+        "xg": 0.45,
+        "goals": 0,
+        "shots": 2
+      }
+    },
+    "shot_events": [
+      {
+        "pid": 39,
+        "team": "A",
+        "timestamp": 13.290986641446008,
+        "frame": 645,
+        "position_x": 0.8557,
+        "position_y": 0.4184,
+        "distance_m": 15.1,
+        "ball_speed": 9.5,
+        "on_target": false,
+        "xg": 0.119
+      },
+      {
+        "pid": 118,
+        "team": "A",
+        "timestamp": 55.265777011408055,
+        "frame": 2682,
+        "position_x": 0.9501,
+        "position_y": 0.2738,
+        "distance_m": 5.2,
+        "ball_speed": 261.9,
+        "on_target": true,
+        "xg": 0.95
+      },
+      {
+        "pid": 133,
+        "team": "B",
+        "timestamp": 65.52765506945474,
+        "frame": 3180,
+        "position_x": 0.1046,
+        "position_y": 0.2459,
+        "distance_m": 11.0,
+        "ball_speed": 16.3,
+        "on_target": false,
+        "xg": 0.299
+      },
+      {
+        "pid": 232,
+        "team": "B",
+        "timestamp": 108.49154211971045,
+        "frame": 5265,
+        "position_x": 0.1357,
+        "position_y": 0.4433,
+        "distance_m": 14.2,
+        "ball_speed": 8.8,
+        "on_target": false,
+        "xg": 0.153
+      }
+    ]
+  },
+  "tactical_analysis": {
+    "formation": {
+      "A": "2-4-4",
+      "B": "4-4-2"
+    },
+    "zone_control": {
+      "A": {
+        "z2_0": 22,
+        "z2_1": 76,
+        "z1_0": 104,
+        "z0_0": 22,
+        "z0_1": 33,
+        "z1_1": 105
+      },
+      "B": {
+        "z1_1": 49,
+        "z2_0": 9,
+        "z1_0": 39,
+        "z0_0": 13,
+        "z0_1": 5
+      }
+    },
+    "passing_network": [
+      {
+        "from": "28",
+        "to": "28",
+        "count": 9,
+        "from_name": "#1 Alisson Becker",
+        "to_name": "#1 Alisson Becker"
+      },
+      {
+        "from": "28",
+        "to": "1",
+        "count": 2,
+        "from_name": "#1 Alisson Becker",
+        "to_name": "#8 Dominik Szoboszlai"
+      },
+      {
+        "from": "1",
+        "to": "28",
+        "count": 2,
+        "from_name": "#8 Dominik Szoboszlai",
+        "to_name": "#1 Alisson Becker"
+      }
+    ]
+  },
+  "ball_tracking": {
+    "total_detections": 501,
+    "detection_rate": 0.258,
+    "position_history": [
+      {
+        "frame": 6,
+        "x": 51.238983154296875,
+        "y": 53.28814697265625,
+        "t": 0.12363708503670705
+      },
+      {
+        "frame": 69,
+        "x": 35.556884765625,
+        "y": 289.4144592285156,
+        "t": 1.421826477922131
+      },
+      {
+        "frame": 81,
+        "x": 276.2906188964844,
+        "y": 231.041748046875,
+        "t": 1.6691006479955453
+      },
+      {
+        "frame": 99,
+        "x": 129.22177505493164,
+        "y": 232.57208251953125,
+        "t": 2.0400119031056665
+      },
+      {
+        "frame": 111,
+        "x": 274.823974609375,
+        "y": 200.84515380859375,
+        "t": 2.2872860731790805
+      },
+      {
+        "frame": 114,
+        "x": 270.6590576171875,
+        "y": 199.95355224609375,
+        "t": 2.349104615697434
+      },
+      {
+        "frame": 117,
+        "x": 268.53131103515625,
+        "y": 200.4327392578125,
+        "t": 2.4109231582157875
+      },
+      {
+        "frame": 120,
+        "x": 267.90142822265625,
+        "y": 202.256103515625,
+        "t": 2.472741700734141
+      },
+      {
+        "frame": 126,
+        "x": 313.0567375886525,
+        "y": 213.0,
+        "t": 2.596378785770848
+      },
+      {
+        "frame": 132,
+        "x": 391.02777099609375,
+        "y": 276.67657470703125,
+        "t": 2.720015870807555
+      },
+      {
+        "frame": 153,
+        "x": 523.041259765625,
+        "y": 269.89190673828125,
+        "t": 3.15274566843603
+      },
+      {
+        "frame": 162,
+        "x": 555.6285247802734,
+        "y": 270.414306640625,
+        "t": 3.3382012959910905
+      },
+      {
+        "frame": 288,
+        "x": 324.7796936035156,
+        "y": 209.7442626953125,
+        "t": 5.934580081761939
+      },
+      {
+        "frame": 291,
+        "x": 325.9107971191406,
+        "y": 209.5054931640625,
+        "t": 5.9963986242802925
+      },
+      {
+        "frame": 339,
+        "x": 270.9158935546875,
+        "y": 217.1444091796875,
+        "t": 6.9854953045739485
+      },
+      {
+        "frame": 342,
+        "x": 266.5615615615616,
+        "y": 210.15615615615616,
+        "t": 7.047313847092302
+      },
+      {
+        "frame": 348,
+        "x": 264.8771929824561,
+        "y": 218.67543859649123,
+        "t": 7.170950932129009
+      },
+      {
+        "frame": 354,
+        "x": 267.35310734463275,
+        "y": 222.90395480225988,
+        "t": 7.294588017165716
+      },
+      {
+        "frame": 360,
+        "x": 192.47286987304688,
+        "y": 35.14405822753906,
+        "t": 7.418225102202423
+      },
+      {
+        "frame": 366,
+        "x": 153.2429906542056,
+        "y": 30.214953271028037,
+        "t": 7.54186218723913
+      },
+      {
+        "frame": 372,
+        "x": 107.96370967741936,
+        "y": 28.18279569892473,
+        "t": 7.665499272275837
+      },
+      {
+        "frame": 378,
+        "x": 217.6397705078125,
+        "y": 31.772232055664062,
+        "t": 7.789136357312544
+      },
+      {
+        "frame": 402,
+        "x": 425.3358154296875,
+        "y": 36.56451416015625,
+        "t": 8.283684697459373
+      },
+      {
+        "frame": 405,
+        "x": 454.27227783203125,
+        "y": 35.83729553222656,
+        "t": 8.345503239977726
+      },
+      {
+        "frame": 408,
+        "x": 220.8126983642578,
+        "y": 219.84796142578125,
+        "t": 8.40732178249608
+      },
+      {
+        "frame": 414,
+        "x": 220.549560546875,
+        "y": 243.24517822265625,
+        "t": 8.530958867532787
+      },
+      {
+        "frame": 420,
+        "x": 236.4021164021164,
+        "y": 251.1084656084656,
+        "t": 8.654595952569494
+      },
+      {
+        "frame": 423,
+        "x": 250.57260131835938,
+        "y": 254.6219482421875,
+        "t": 8.716414495087847
+      },
+      {
+        "frame": 426,
+        "x": 166.89981079101562,
+        "y": 77.52584838867188,
+        "t": 8.778233037606201
+      },
+      {
+        "frame": 432,
+        "x": 123.03856749311295,
+        "y": 31.195592286501377,
+        "t": 8.901870122642908
+      },
+      {
+        "frame": 438,
+        "x": 107.97967479674796,
+        "y": 28.23712737127371,
+        "t": 9.025507207679615
+      },
+      {
+        "frame": 444,
+        "x": 394.3773498535156,
+        "y": 75.44525146484375,
+        "t": 9.149144292716322
+      },
+      {
+        "frame": 447,
+        "x": 302.6290588378906,
+        "y": 232.5208740234375,
+        "t": 9.210962835234675
+      },
+      {
+        "frame": 450,
+        "x": 335.8333333333333,
+        "y": 208.6910569105691,
+        "t": 9.272781377753029
+      },
+      {
+        "frame": 453,
+        "x": 36.851813316345215,
+        "y": 85.88922119140625,
+        "t": 9.334599920271383
+      },
+      {
+        "frame": 456,
+        "x": 60.67741394042969,
+        "y": 85.3125,
+        "t": 9.396418462789736
+      },
+      {
+        "frame": 462,
+        "x": 528.77783203125,
+        "y": 73.93377685546875,
+        "t": 9.520055547826443
+      },
+      {
+        "frame": 465,
+        "x": 70.03878784179688,
+        "y": 86.26565551757812,
+        "t": 9.581874090344797
+      },
+      {
+        "frame": 468,
+        "x": 53.35648148148148,
+        "y": 85.41975308641975,
+        "t": 9.64369263286315
+      },
+      {
+        "frame": 543,
+        "x": 177.5661163330078,
+        "y": 253.15643310546875,
+        "t": 11.189156195821989
+      },
+      {
+        "frame": 594,
+        "x": 507.41778564453125,
+        "y": 116.97144317626953,
+        "t": 12.240071418633999
+      },
+      {
+        "frame": 600,
+        "x": 510.61139028475714,
+        "y": 96.23115577889448,
+        "t": 12.363708503670706
+      },
+      {
+        "frame": 603,
+        "x": 525.9598388671875,
+        "y": 137.6748046875,
+        "t": 12.425527046189059
+      },
+      {
+        "frame": 606,
+        "x": 530.077392578125,
+        "y": 145.65158081054688,
+        "t": 12.487345588707413
+      },
+      {
+        "frame": 609,
+        "x": 532.856201171875,
+        "y": 147.124267578125,
+        "t": 12.549164131225766
+      },
+      {
+        "frame": 612,
+        "x": 534.2781982421875,
+        "y": 144.01849365234375,
+        "t": 12.61098267374412
+      },
+      {
+        "frame": 624,
+        "x": 539.3536376953125,
+        "y": 136.11065673828125,
+        "t": 12.858256843817534
+      },
+      {
+        "frame": 627,
+        "x": 539.6860961914062,
+        "y": 135.9395751953125,
+        "t": 12.920075386335887
+      },
+      {
+        "frame": 630,
+        "x": 540.4317626953125,
+        "y": 136.60357666015625,
+        "t": 12.981893928854241
+      },
+      {
+        "frame": 633,
+        "x": 540.629638671875,
+        "y": 137.93115234375,
+        "t": 13.043712471372594
+      },
+      {
+        "frame": 636,
+        "x": 542.0062255859375,
+        "y": 141.4813232421875,
+        "t": 13.105531013890948
+      },
+      {
+        "frame": 639,
+        "x": 543.1170654296875,
+        "y": 143.11135864257812,
+        "t": 13.1673495564093
+      },
+      {
+        "frame": 645,
+        "x": 547.6707763671875,
+        "y": 150.630126953125,
+        "t": 13.290986641446008
+      },
+      {
+        "frame": 648,
+        "x": 548.7437744140625,
+        "y": 154.94424438476562,
+        "t": 13.352805183964362
+      },
+      {
+        "frame": 657,
+        "x": 549.2276611328125,
+        "y": 151.08502197265625,
+        "t": 13.538260811519422
+      },
+      {
+        "frame": 669,
+        "x": 547.65234375,
+        "y": 149.89459228515625,
+        "t": 13.785534981592836
+      },
+      {
+        "frame": 672,
+        "x": 547.22802734375,
+        "y": 150.82608032226562,
+        "t": 13.84735352411119
+      },
+      {
+        "frame": 675,
+        "x": 547.1156005859375,
+        "y": 152.62738037109375,
+        "t": 13.909172066629544
+      },
+      {
+        "frame": 681,
+        "x": 546.9711303710938,
+        "y": 158.603271484375,
+        "t": 14.032809151666251
+      },
+      {
+        "frame": 687,
+        "x": 547.5791015625,
+        "y": 154.97412109375,
+        "t": 14.156446236702958
+      },
+      {
+        "frame": 690,
+        "x": 548.371826171875,
+        "y": 154.78707885742188,
+        "t": 14.218264779221311
+      },
+      {
+        "frame": 708,
+        "x": 276.43212890625,
+        "y": 86.9366455078125,
+        "t": 14.589176034331432
+      },
+      {
+        "frame": 711,
+        "x": 274.01470947265625,
+        "y": 86.69692993164062,
+        "t": 14.650994576849786
+      },
+      {
+        "frame": 717,
+        "x": 500.10443115234375,
+        "y": 159.15655517578125,
+        "t": 14.774631661886493
+      },
+      {
+        "frame": 723,
+        "x": 492.468017578125,
+        "y": 159.266357421875,
+        "t": 14.8982687469232
+      },
+      {
+        "frame": 726,
+        "x": 284.32415771484375,
+        "y": 87.27578735351562,
+        "t": 14.960087289441553
+      },
+      {
+        "frame": 729,
+        "x": 486.2080078125,
+        "y": 159.30938720703125,
+        "t": 15.021905831959907
+      },
+      {
+        "frame": 732,
+        "x": 484.2811279296875,
+        "y": 159.1663818359375,
+        "t": 15.08372437447826
+      },
+      {
+        "frame": 735,
+        "x": 482.31549072265625,
+        "y": 159.62478637695312,
+        "t": 15.145542916996614
+      },
+      {
+        "frame": 741,
+        "x": 478.309326171875,
+        "y": 160.11587524414062,
+        "t": 15.269180002033321
+      },
+      {
+        "frame": 744,
+        "x": 476.93505859375,
+        "y": 160.01971435546875,
+        "t": 15.330998544551674
+      },
+      {
+        "frame": 747,
+        "x": 475.830078125,
+        "y": 160.05322265625,
+        "t": 15.392817087070028
+      },
+      {
+        "frame": 750,
+        "x": 373.1246643066406,
+        "y": 80.41485595703125,
+        "t": 15.454635629588381
+      },
+      {
+        "frame": 789,
+        "x": 468.74102783203125,
+        "y": 184.1666259765625,
+        "t": 16.25827668232698
+      },
+      {
+        "frame": 801,
+        "x": 468.5008850097656,
+        "y": 193.1575927734375,
+        "t": 16.505550852400393
+      },
+      {
+        "frame": 807,
+        "x": 470.32666015625,
+        "y": 199.0009765625,
+        "t": 16.6291879374371
+      },
+      {
+        "frame": 810,
+        "x": 470.80657958984375,
+        "y": 200.6622314453125,
+        "t": 16.69100647995545
+      },
+      {
+        "frame": 819,
+        "x": 474.2977294921875,
+        "y": 205.873291015625,
+        "t": 16.876462107510513
+      },
+      {
+        "frame": 822,
+        "x": 475.5863037109375,
+        "y": 206.7159423828125,
+        "t": 16.938280650028865
+      },
+      {
+        "frame": 825,
+        "x": 476.52294921875,
+        "y": 208.5771484375,
+        "t": 17.00009919254722
+      },
+      {
+        "frame": 828,
+        "x": 477.48681640625,
+        "y": 210.2672119140625,
+        "t": 17.061917735065574
+      },
+      {
+        "frame": 840,
+        "x": 469.487060546875,
+        "y": 215.04681396484375,
+        "t": 17.309191905138988
+      },
+      {
+        "frame": 843,
+        "x": 464.9242858886719,
+        "y": 215.83807373046875,
+        "t": 17.37101044765734
+      },
+      {
+        "frame": 846,
+        "x": 461.4609375,
+        "y": 216.10635375976562,
+        "t": 17.432828990175693
+      },
+      {
+        "frame": 849,
+        "x": 458.39324951171875,
+        "y": 217.19140625,
+        "t": 17.49464753269405
+      },
+      {
+        "frame": 852,
+        "x": 455.28271484375,
+        "y": 217.9373779296875,
+        "t": 17.556466075212402
+      },
+      {
+        "frame": 855,
+        "x": 452.77093505859375,
+        "y": 218.3817138671875,
+        "t": 17.618284617730755
+      },
+      {
+        "frame": 858,
+        "x": 451.922119140625,
+        "y": 218.61883544921875,
+        "t": 17.680103160249107
+      },
+      {
+        "frame": 867,
+        "x": 446.2567138671875,
+        "y": 221.2716064453125,
+        "t": 17.86555878780417
+      },
+      {
+        "frame": 870,
+        "x": 445.64019775390625,
+        "y": 221.44866943359375,
+        "t": 17.92737733032252
+      },
+      {
+        "frame": 873,
+        "x": 445.2511291503906,
+        "y": 221.7012939453125,
+        "t": 17.989195872840877
+      },
+      {
+        "frame": 876,
+        "x": 445.0843505859375,
+        "y": 222.22842407226562,
+        "t": 18.05101441535923
+      },
+      {
+        "frame": 879,
+        "x": 445.09307861328125,
+        "y": 222.53961181640625,
+        "t": 18.112832957877583
+      },
+      {
+        "frame": 882,
+        "x": 445.36102294921875,
+        "y": 222.42779541015625,
+        "t": 18.174651500395935
+      },
+      {
+        "frame": 885,
+        "x": 446.288330078125,
+        "y": 222.97952270507812,
+        "t": 18.23647004291429
+      },
+      {
+        "frame": 888,
+        "x": 20.05051612854004,
+        "y": 89.56356811523438,
+        "t": 18.298288585432644
+      },
+      {
+        "frame": 894,
+        "x": 449.5995178222656,
+        "y": 223.29202270507812,
+        "t": 18.42192567046935
+      },
+      {
+        "frame": 897,
+        "x": 451.3197021484375,
+        "y": 223.06103515625,
+        "t": 18.483744212987705
+      },
+      {
+        "frame": 900,
+        "x": 453.38287353515625,
+        "y": 223.43673706054688,
+        "t": 18.545562755506058
+      },
+      {
+        "frame": 903,
+        "x": 454.81011962890625,
+        "y": 223.23123168945312,
+        "t": 18.60738129802441
+      },
+      {
+        "frame": 906,
+        "x": 3.016270160675049,
+        "y": 86.74037170410156,
+        "t": 18.669199840542767
+      },
+      {
+        "frame": 909,
+        "x": 459.18829345703125,
+        "y": 222.96551513671875,
+        "t": 18.73101838306112
+      },
+      {
+        "frame": 912,
+        "x": 14.217744827270508,
+        "y": 86.49880981445312,
+        "t": 18.792836925579472
+      },
+      {
+        "frame": 915,
+        "x": 462.4683837890625,
+        "y": 223.32147216796875,
+        "t": 18.854655468097825
+      },
+      {
+        "frame": 918,
+        "x": 30.718603134155273,
+        "y": 84.91717529296875,
+        "t": 18.91647401061618
+      },
+      {
+        "frame": 921,
+        "x": 467.42864990234375,
+        "y": 222.7196044921875,
+        "t": 18.978292553134533
+      },
+      {
+        "frame": 924,
+        "x": 469.1268310546875,
+        "y": 223.06329345703125,
+        "t": 19.040111095652886
+      },
+      {
+        "frame": 933,
+        "x": 245.13082885742188,
+        "y": 81.34402465820312,
+        "t": 19.225566723207947
+      },
+      {
+        "frame": 936,
+        "x": 251.97283935546875,
+        "y": 81.15809631347656,
+        "t": 19.2873852657263
+      },
+      {
+        "frame": 939,
+        "x": 85.61347961425781,
+        "y": 81.84739685058594,
+        "t": 19.349203808244653
+      },
+      {
+        "frame": 942,
+        "x": 92.49968719482422,
+        "y": 81.685302734375,
+        "t": 19.41102235076301
+      },
+      {
+        "frame": 945,
+        "x": 268.6981201171875,
+        "y": 80.72737121582031,
+        "t": 19.47284089328136
+      },
+      {
+        "frame": 948,
+        "x": 295.6701754385965,
+        "y": 92.9298245614035,
+        "t": 19.534659435799714
+      },
+      {
+        "frame": 951,
+        "x": 109.51179504394531,
+        "y": 81.982421875,
+        "t": 19.596477978318067
+      },
+      {
+        "frame": 954,
+        "x": 115.82916259765625,
+        "y": 82.03466796875,
+        "t": 19.658296520836423
+      },
+      {
+        "frame": 957,
+        "x": 118.17752838134766,
+        "y": 82.2435302734375,
+        "t": 19.720115063354775
+      },
+      {
+        "frame": 963,
+        "x": 125.35929870605469,
+        "y": 81.930908203125,
+        "t": 19.84375214839148
+      },
+      {
+        "frame": 1011,
+        "x": 131.30369567871094,
+        "y": 87.29885864257812,
+        "t": 20.83284882868514
+      },
+      {
+        "frame": 1014,
+        "x": 131.56405639648438,
+        "y": 87.56561279296875,
+        "t": 20.894667371203493
+      },
+      {
+        "frame": 1041,
+        "x": 494.0949401855469,
+        "y": 184.60296630859375,
+        "t": 21.451034253868674
+      },
+      {
+        "frame": 1089,
+        "x": 132.40817260742188,
+        "y": 97.65974426269531,
+        "t": 22.44013093416233
+      },
+      {
+        "frame": 1146,
+        "x": 365.662841796875,
+        "y": 95.21585083007812,
+        "t": 23.614683242011047
+      },
+      {
+        "frame": 1152,
+        "x": 411.0623052959502,
+        "y": 113.53894080996884,
+        "t": 23.738320327047756
+      },
+      {
+        "frame": 1158,
+        "x": 415.2,
+        "y": 112.5909090909091,
+        "t": 23.86195741208446
+      },
+      {
+        "frame": 1164,
+        "x": 417.50847457627117,
+        "y": 111.5,
+        "t": 23.98559449712117
+      },
+      {
+        "frame": 1170,
+        "x": 417.84789644012943,
+        "y": 110.43042071197411,
+        "t": 24.109231582157875
+      },
+      {
+        "frame": 1176,
+        "x": 416.96632996632997,
+        "y": 110.07407407407408,
+        "t": 24.232868667194584
+      },
+      {
+        "frame": 1182,
+        "x": 124.43358612060547,
+        "y": 97.67189025878906,
+        "t": 24.35650575223129
+      },
+      {
+        "frame": 1191,
+        "x": 116.77021026611328,
+        "y": 96.96607971191406,
+        "t": 24.54196137978635
+      },
+      {
+        "frame": 1197,
+        "x": 110.19969177246094,
+        "y": 96.9346923828125,
+        "t": 24.665598464823056
+      },
+      {
+        "frame": 1200,
+        "x": 108.11395263671875,
+        "y": 95.96730041503906,
+        "t": 24.727417007341412
+      },
+      {
+        "frame": 1206,
+        "x": 450.2824401855469,
+        "y": 159.737548828125,
+        "t": 24.851054092378117
+      },
+      {
+        "frame": 1209,
+        "x": 441.6578369140625,
+        "y": 161.467041015625,
+        "t": 24.91287263489647
+      },
+      {
+        "frame": 1212,
+        "x": 433.231689453125,
+        "y": 162.76675415039062,
+        "t": 24.974691177414826
+      },
+      {
+        "frame": 1224,
+        "x": 396.48062015503876,
+        "y": 154.56201550387595,
+        "t": 25.22196534748824
+      },
+      {
+        "frame": 1227,
+        "x": 76.12437438964844,
+        "y": 96.02557373046875,
+        "t": 25.283783890006593
+      },
+      {
+        "frame": 1233,
+        "x": 70.20994567871094,
+        "y": 96.34716796875,
+        "t": 25.4074209750433
+      },
+      {
+        "frame": 1236,
+        "x": 68.19953155517578,
+        "y": 96.11029052734375,
+        "t": 25.469239517561654
+      },
+      {
+        "frame": 1248,
+        "x": 54.119415283203125,
+        "y": 96.640625,
+        "t": 25.716513687635068
+      },
+      {
+        "frame": 1251,
+        "x": 51.43050765991211,
+        "y": 96.40672302246094,
+        "t": 25.77833223015342
+      },
+      {
+        "frame": 1254,
+        "x": 46.54485321044922,
+        "y": 96.82089233398438,
+        "t": 25.840150772671773
+      },
+      {
+        "frame": 1266,
+        "x": 27.145084381103516,
+        "y": 97.2342529296875,
+        "t": 26.087424942745187
+      },
+      {
+        "frame": 1275,
+        "x": 12.24120807647705,
+        "y": 96.67242431640625,
+        "t": 26.27288057030025
+      },
+      {
+        "frame": 1293,
+        "x": 237.92967224121094,
+        "y": 88.18777465820312,
+        "t": 26.64379182541037
+      },
+      {
+        "frame": 1296,
+        "x": 283.74652777777777,
+        "y": 103.0486111111111,
+        "t": 26.705610367928724
+      },
+      {
+        "frame": 1302,
+        "x": 275.21014492753625,
+        "y": 101.9927536231884,
+        "t": 26.82924745296543
+      },
+      {
+        "frame": 1305,
+        "x": 161.84228515625,
+        "y": 88.02293395996094,
+        "t": 26.891065995483785
+      },
+      {
+        "frame": 1371,
+        "x": 193.67300415039062,
+        "y": 79.72756958007812,
+        "t": 28.25107393088756
+      },
+      {
+        "frame": 1374,
+        "x": 235.9852507374631,
+        "y": 96.20648967551622,
+        "t": 28.312892473405917
+      },
+      {
+        "frame": 1380,
+        "x": 235.9571865443425,
+        "y": 96.35474006116208,
+        "t": 28.436529558442622
+      },
+      {
+        "frame": 1386,
+        "x": 236.03508771929825,
+        "y": 96.74035087719298,
+        "t": 28.56016664347933
+      },
+      {
+        "frame": 1392,
+        "x": 236.6888888888889,
+        "y": 97.35555555555555,
+        "t": 28.683803728516036
+      },
+      {
+        "frame": 1398,
+        "x": 237.09375,
+        "y": 97.20833333333334,
+        "t": 28.807440813552745
+      },
+      {
+        "frame": 1404,
+        "x": 321.22210693359375,
+        "y": 186.16741943359375,
+        "t": 28.93107789858945
+      },
+      {
+        "frame": 1407,
+        "x": 204.22247314453125,
+        "y": 80.81735229492188,
+        "t": 28.992896441107803
+      },
+      {
+        "frame": 1413,
+        "x": 205.60736083984375,
+        "y": 81.80282592773438,
+        "t": 29.11653352614451
+      },
+      {
+        "frame": 1416,
+        "x": 270.1946105957031,
+        "y": 190.52001953125,
+        "t": 29.178352068662864
+      },
+      {
+        "frame": 1419,
+        "x": 33.98686218261719,
+        "y": 85.82211303710938,
+        "t": 29.240170611181217
+      },
+      {
+        "frame": 1422,
+        "x": 36.53858184814453,
+        "y": 86.16952514648438,
+        "t": 29.301989153699573
+      },
+      {
+        "frame": 1428,
+        "x": 44.16933822631836,
+        "y": 85.89225769042969,
+        "t": 29.425626238736278
+      },
+      {
+        "frame": 1443,
+        "x": 195.842041015625,
+        "y": 195.1396484375,
+        "t": 29.734718951328045
+      },
+      {
+        "frame": 1452,
+        "x": 410.9676513671875,
+        "y": 74.2557373046875,
+        "t": 29.920174578883106
+      },
+      {
+        "frame": 1560,
+        "x": 370.600341796875,
+        "y": 182.7032470703125,
+        "t": 32.145642109543836
+      },
+      {
+        "frame": 1572,
+        "x": 323.5625,
+        "y": 178.12847222222223,
+        "t": 32.392916279617246
+      },
+      {
+        "frame": 1575,
+        "x": 378.3808898925781,
+        "y": 181.67413330078125,
+        "t": 32.4547348221356
+      },
+      {
+        "frame": 1635,
+        "x": 395.1905212402344,
+        "y": 180.99298095703125,
+        "t": 33.69110567250267
+      },
+      {
+        "frame": 1638,
+        "x": 395.5322570800781,
+        "y": 181.0758056640625,
+        "t": 33.752924215021025
+      },
+      {
+        "frame": 1641,
+        "x": 395.69317626953125,
+        "y": 181.20162963867188,
+        "t": 33.81474275753938
+      },
+      {
+        "frame": 1644,
+        "x": 396.09100341796875,
+        "y": 181.39593505859375,
+        "t": 33.87656130005773
+      },
+      {
+        "frame": 1647,
+        "x": 396.2899169921875,
+        "y": 181.650634765625,
+        "t": 33.93837984257608
+      },
+      {
+        "frame": 1650,
+        "x": 396.41082763671875,
+        "y": 182.10333251953125,
+        "t": 34.00019838509444
+      },
+      {
+        "frame": 1662,
+        "x": 356.1,
+        "y": 168.48,
+        "t": 34.24747255516785
+      },
+      {
+        "frame": 1887,
+        "x": 2.8172192573547363,
+        "y": 274.796630859375,
+        "t": 38.88386324404437
+      },
+      {
+        "frame": 1989,
+        "x": 462.40716552734375,
+        "y": 247.98788452148438,
+        "t": 40.98569368966839
+      },
+      {
+        "frame": 1992,
+        "x": 459.5961608886719,
+        "y": 248.05279541015625,
+        "t": 41.04751223218674
+      },
+      {
+        "frame": 1998,
+        "x": 453.1666259765625,
+        "y": 248.828125,
+        "t": 41.171149317223446
+      },
+      {
+        "frame": 2001,
+        "x": 450.98016357421875,
+        "y": 249.142578125,
+        "t": 41.232967859741805
+      },
+      {
+        "frame": 2007,
+        "x": 447.1187744140625,
+        "y": 248.86773681640625,
+        "t": 41.35660494477851
+      },
+      {
+        "frame": 2010,
+        "x": 446.5492248535156,
+        "y": 248.79638671875,
+        "t": 41.41842348729686
+      },
+      {
+        "frame": 2013,
+        "x": 445.98138427734375,
+        "y": 248.7691650390625,
+        "t": 41.480242029815216
+      },
+      {
+        "frame": 2016,
+        "x": 445.33367919921875,
+        "y": 248.07379150390625,
+        "t": 41.54206057233357
+      },
+      {
+        "frame": 2019,
+        "x": 445.08612060546875,
+        "y": 247.34234619140625,
+        "t": 41.60387911485192
+      },
+      {
+        "frame": 2022,
+        "x": 445.1492919921875,
+        "y": 246.83001708984375,
+        "t": 41.66569765737028
+      },
+      {
+        "frame": 2028,
+        "x": 554.8125,
+        "y": 74.7720947265625,
+        "t": 41.789334742406986
+      },
+      {
+        "frame": 2331,
+        "x": 532.42333984375,
+        "y": 161.6280517578125,
+        "t": 48.03300753676069
+      },
+      {
+        "frame": 2463,
+        "x": 619.2185668945312,
+        "y": 89.17816162109375,
+        "t": 50.75302340756824
+      },
+      {
+        "frame": 2466,
+        "x": 620.2006225585938,
+        "y": 89.38853454589844,
+        "t": 50.8148419500866
+      },
+      {
+        "frame": 2469,
+        "x": 620.9312744140625,
+        "y": 89.37942504882812,
+        "t": 50.876660492604955
+      },
+      {
+        "frame": 2472,
+        "x": 621.4848022460938,
+        "y": 89.78253173828125,
+        "t": 50.93847903512331
+      },
+      {
+        "frame": 2520,
+        "x": 307.72015380859375,
+        "y": 136.1358642578125,
+        "t": 51.927575715416964
+      },
+      {
+        "frame": 2535,
+        "x": 292.1748962402344,
+        "y": 143.206298828125,
+        "t": 52.23666842800873
+      },
+      {
+        "frame": 2538,
+        "x": 291.51019287109375,
+        "y": 145.03912353515625,
+        "t": 52.29848697052709
+      },
+      {
+        "frame": 2541,
+        "x": 290.68243408203125,
+        "y": 145.96795654296875,
+        "t": 52.36030551304544
+      },
+      {
+        "frame": 2565,
+        "x": 286.6988220214844,
+        "y": 153.69387817382812,
+        "t": 52.85485385319227
+      },
+      {
+        "frame": 2571,
+        "x": 284.99774169921875,
+        "y": 154.79360961914062,
+        "t": 52.97849093822897
+      },
+      {
+        "frame": 2574,
+        "x": 283.8988037109375,
+        "y": 154.7833251953125,
+        "t": 53.040309480747325
+      },
+      {
+        "frame": 2583,
+        "x": 276.28082275390625,
+        "y": 158.2572021484375,
+        "t": 53.22576510830239
+      },
+      {
+        "frame": 2607,
+        "x": 298.3361511230469,
+        "y": 154.73876953125,
+        "t": 53.72031344844922
+      },
+      {
+        "frame": 2610,
+        "x": 301.554443359375,
+        "y": 153.55532836914062,
+        "t": 53.78213199096757
+      },
+      {
+        "frame": 2616,
+        "x": 386.9100341796875,
+        "y": 96.37443542480469,
+        "t": 53.905769076004276
+      },
+      {
+        "frame": 2622,
+        "x": 428.6546546546547,
+        "y": 105.5015015015015,
+        "t": 54.02940616104098
+      },
+      {
+        "frame": 2628,
+        "x": 226.86764526367188,
+        "y": 95.81558227539062,
+        "t": 54.15304324607769
+      },
+      {
+        "frame": 2634,
+        "x": 219.06805419921875,
+        "y": 96.81393432617188,
+        "t": 54.2766803311144
+      },
+      {
+        "frame": 2643,
+        "x": 155.95758056640625,
+        "y": 96.78125,
+        "t": 54.46213595866946
+      },
+      {
+        "frame": 2649,
+        "x": 244.7090606689453,
+        "y": 98.447021484375,
+        "t": 54.58577304370616
+      },
+      {
+        "frame": 2652,
+        "x": 139.97579956054688,
+        "y": 96.88333129882812,
+        "t": 54.647591586224515
+      },
+      {
+        "frame": 2664,
+        "x": 627.7694091796875,
+        "y": 96.56692504882812,
+        "t": 54.89486575629793
+      },
+      {
+        "frame": 2670,
+        "x": 213.3577423095703,
+        "y": 99.64543151855469,
+        "t": 55.01850284133464
+      },
+      {
+        "frame": 2679,
+        "x": 204.30711364746094,
+        "y": 100.317626953125,
+        "t": 55.2039584688897
+      },
+      {
+        "frame": 2682,
+        "x": 608.0662841796875,
+        "y": 98.58529663085938,
+        "t": 55.265777011408055
+      },
+      {
+        "frame": 2781,
+        "x": 187.9915313720703,
+        "y": 97.21369934082031,
+        "t": 57.30578891451372
+      },
+      {
+        "frame": 2784,
+        "x": 188.16485595703125,
+        "y": 96.86112976074219,
+        "t": 57.36760745703207
+      },
+      {
+        "frame": 2787,
+        "x": 607.0286254882812,
+        "y": 96.91973876953125,
+        "t": 57.429425999550425
+      },
+      {
+        "frame": 2790,
+        "x": 203.46231079101562,
+        "y": 153.3497314453125,
+        "t": 57.49124454206878
+      },
+      {
+        "frame": 2793,
+        "x": 193.01016235351562,
+        "y": 97.51748657226562,
+        "t": 57.55306308458713
+      },
+      {
+        "frame": 2796,
+        "x": 612.98291015625,
+        "y": 97.08053588867188,
+        "t": 57.61488162710549
+      },
+      {
+        "frame": 2799,
+        "x": 196.06280517578125,
+        "y": 96.84414672851562,
+        "t": 57.67670016962384
+      },
+      {
+        "frame": 2802,
+        "x": 169.92110453648914,
+        "y": 131.21499013806704,
+        "t": 57.738518712142195
+      },
+      {
+        "frame": 2805,
+        "x": 300.28375244140625,
+        "y": 98.41030883789062,
+        "t": 57.80033725466055
+      },
+      {
+        "frame": 2811,
+        "x": 622.5491943359375,
+        "y": 96.35595703125,
+        "t": 57.92397433969725
+      },
+      {
+        "frame": 2817,
+        "x": 307.7930908203125,
+        "y": 96.39028930664062,
+        "t": 58.047611424733965
+      },
+      {
+        "frame": 2820,
+        "x": 312.7804391217565,
+        "y": 119.12774451097803,
+        "t": 58.10942996725232
+      },
+      {
+        "frame": 2826,
+        "x": 318.120218579235,
+        "y": 119.36976320582878,
+        "t": 58.23306705228902
+      },
+      {
+        "frame": 2829,
+        "x": 631.6484375,
+        "y": 96.51657104492188,
+        "t": 58.294885594807376
+      },
+      {
+        "frame": 2832,
+        "x": 211.2762451171875,
+        "y": 95.12103271484375,
+        "t": 58.35670413732573
+      },
+      {
+        "frame": 2835,
+        "x": 243.21148681640625,
+        "y": 160.55682373046875,
+        "t": 58.41852267984408
+      },
+      {
+        "frame": 2838,
+        "x": 213.29617309570312,
+        "y": 95.71337890625,
+        "t": 58.48034122236243
+      },
+      {
+        "frame": 2841,
+        "x": 315.06195068359375,
+        "y": 97.31610107421875,
+        "t": 58.54215976488079
+      },
+      {
+        "frame": 2844,
+        "x": 315.9970703125,
+        "y": 97.4444580078125,
+        "t": 58.603978307399146
+      },
+      {
+        "frame": 2847,
+        "x": 316.2657775878906,
+        "y": 97.66558837890625,
+        "t": 58.6657968499175
+      },
+      {
+        "frame": 2856,
+        "x": 344.64684684684687,
+        "y": 122.47207207207207,
+        "t": 58.851252477472556
+      },
+      {
+        "frame": 2862,
+        "x": 351.390243902439,
+        "y": 122.0081300813008,
+        "t": 58.97488956250926
+      },
+      {
+        "frame": 2868,
+        "x": 324.02264404296875,
+        "y": 95.75872802734375,
+        "t": 59.098526647545974
+      },
+      {
+        "frame": 2874,
+        "x": 364.6169772256729,
+        "y": 120.75776397515529,
+        "t": 59.22216373258268
+      },
+      {
+        "frame": 2880,
+        "x": 371.1622222222222,
+        "y": 121.78666666666666,
+        "t": 59.345800817619384
+      },
+      {
+        "frame": 2892,
+        "x": 382.95670995671,
+        "y": 121.55844155844156,
+        "t": 59.5930749876928
+      },
+      {
+        "frame": 2898,
+        "x": 387.1136363636364,
+        "y": 121.76767676767676,
+        "t": 59.71671207272951
+      },
+      {
+        "frame": 2910,
+        "x": 391.86772486772486,
+        "y": 122.33333333333334,
+        "t": 59.96398624280292
+      },
+      {
+        "frame": 2919,
+        "x": 230.07449340820312,
+        "y": 238.1295166015625,
+        "t": 60.14944187035798
+      },
+      {
+        "frame": 2922,
+        "x": 233.65614318847656,
+        "y": 238.5469970703125,
+        "t": 60.211260412876335
+      },
+      {
+        "frame": 2928,
+        "x": 241.64215087890625,
+        "y": 238.9134521484375,
+        "t": 60.33489749791304
+      },
+      {
+        "frame": 2931,
+        "x": 162.07608032226562,
+        "y": 88.35128784179688,
+        "t": 60.39671604043139
+      },
+      {
+        "frame": 2934,
+        "x": 247.05133056640625,
+        "y": 239.3358154296875,
+        "t": 60.45853458294975
+      },
+      {
+        "frame": 2937,
+        "x": 154.26254272460938,
+        "y": 87.24276733398438,
+        "t": 60.520353125468105
+      },
+      {
+        "frame": 2940,
+        "x": 249.84524536132812,
+        "y": 239.88638305664062,
+        "t": 60.58217166798646
+      },
+      {
+        "frame": 2943,
+        "x": 250.8910675048828,
+        "y": 239.75408935546875,
+        "t": 60.64399021050481
+      },
+      {
+        "frame": 2946,
+        "x": 251.17657470703125,
+        "y": 239.84576416015625,
+        "t": 60.70580875302316
+      },
+      {
+        "frame": 2949,
+        "x": 251.09255981445312,
+        "y": 239.5240478515625,
+        "t": 60.767627295541516
+      },
+      {
+        "frame": 2952,
+        "x": 251.04293823242188,
+        "y": 239.64288330078125,
+        "t": 60.82944583805987
+      },
+      {
+        "frame": 2955,
+        "x": 250.20919799804688,
+        "y": 239.30059814453125,
+        "t": 60.89126438057822
+      },
+      {
+        "frame": 2958,
+        "x": 249.44808959960938,
+        "y": 239.19747924804688,
+        "t": 60.95308292309658
+      },
+      {
+        "frame": 2973,
+        "x": 259.57769775390625,
+        "y": 235.30999755859375,
+        "t": 61.262175635688344
+      },
+      {
+        "frame": 2979,
+        "x": 265.66876220703125,
+        "y": 234.27142333984375,
+        "t": 61.38581272072505
+      },
+      {
+        "frame": 2982,
+        "x": 267.7900390625,
+        "y": 232.99151611328125,
+        "t": 61.44763126324341
+      },
+      {
+        "frame": 2985,
+        "x": 268.8656005859375,
+        "y": 231.5628662109375,
+        "t": 61.50944980576176
+      },
+      {
+        "frame": 3000,
+        "x": 268.1240234375,
+        "y": 230.779296875,
+        "t": 61.818542518353524
+      },
+      {
+        "frame": 3003,
+        "x": 267.741455078125,
+        "y": 230.78640747070312,
+        "t": 61.88036106087188
+      },
+      {
+        "frame": 3006,
+        "x": 267.44964599609375,
+        "y": 230.91204833984375,
+        "t": 61.94217960339024
+      },
+      {
+        "frame": 3009,
+        "x": 266.4595031738281,
+        "y": 230.68963623046875,
+        "t": 62.00399814590859
+      },
+      {
+        "frame": 3012,
+        "x": 265.48345947265625,
+        "y": 230.77630615234375,
+        "t": 62.06581668842694
+      },
+      {
+        "frame": 3021,
+        "x": 261.71978759765625,
+        "y": 230.74896240234375,
+        "t": 62.251272315982
+      },
+      {
+        "frame": 3024,
+        "x": 260.98394775390625,
+        "y": 230.4605712890625,
+        "t": 62.31309085850035
+      },
+      {
+        "frame": 3027,
+        "x": 259.7308349609375,
+        "y": 230.58184814453125,
+        "t": 62.37490940101871
+      },
+      {
+        "frame": 3033,
+        "x": 65.92378425598145,
+        "y": 86.58792114257812,
+        "t": 62.49854648605542
+      },
+      {
+        "frame": 3039,
+        "x": 49.64586639404297,
+        "y": 87.19851684570312,
+        "t": 62.62218357109212
+      },
+      {
+        "frame": 3042,
+        "x": 41.663700103759766,
+        "y": 87.07453918457031,
+        "t": 62.684002113610475
+      },
+      {
+        "frame": 3048,
+        "x": 26.161174774169922,
+        "y": 88.08261108398438,
+        "t": 62.80763919864718
+      },
+      {
+        "frame": 3150,
+        "x": 75.43913269042969,
+        "y": 89.62771606445312,
+        "t": 64.9094696442712
+      },
+      {
+        "frame": 3156,
+        "x": 116.03625730994152,
+        "y": 87.60584795321637,
+        "t": 65.03310672930792
+      },
+      {
+        "frame": 3177,
+        "x": 73.63720703125,
+        "y": 88.55975341796875,
+        "t": 65.46583652693639
+      },
+      {
+        "frame": 3180,
+        "x": 66.92218017578125,
+        "y": 88.52691650390625,
+        "t": 65.52765506945474
+      },
+      {
+        "frame": 3183,
+        "x": 17.801782608032227,
+        "y": 90.21197509765625,
+        "t": 65.58947361197309
+      },
+      {
+        "frame": 3228,
+        "x": 33.98739528656006,
+        "y": 87.77000427246094,
+        "t": 66.5167517497484
+      },
+      {
+        "frame": 3246,
+        "x": 3.7083333333333335,
+        "y": 89.3287037037037,
+        "t": 66.88766300485851
+      },
+      {
+        "frame": 3264,
+        "x": 44.39514348785872,
+        "y": 88.82339955849889,
+        "t": 67.25857425996864
+      },
+      {
+        "frame": 3324,
+        "x": 387.1669921875,
+        "y": 112.75137329101562,
+        "t": 68.4949451103357
+      },
+      {
+        "frame": 3327,
+        "x": 404.82476806640625,
+        "y": 100.34829711914062,
+        "t": 68.55676365285406
+      },
+      {
+        "frame": 3330,
+        "x": 387.46600341796875,
+        "y": 80.92996215820312,
+        "t": 68.61858219537241
+      },
+      {
+        "frame": 3336,
+        "x": 350.1744384765625,
+        "y": 57.620849609375,
+        "t": 68.74221928040912
+      },
+      {
+        "frame": 3339,
+        "x": 329.66558837890625,
+        "y": 57.267852783203125,
+        "t": 68.80403782292747
+      },
+      {
+        "frame": 3342,
+        "x": 314.18206787109375,
+        "y": 64.98347473144531,
+        "t": 68.86585636544582
+      },
+      {
+        "frame": 3345,
+        "x": 299.2179260253906,
+        "y": 77.02102661132812,
+        "t": 68.92767490796419
+      },
+      {
+        "frame": 3348,
+        "x": 284.168212890625,
+        "y": 94.943359375,
+        "t": 68.98949345048254
+      },
+      {
+        "frame": 3351,
+        "x": 346.67694091796875,
+        "y": 134.5198974609375,
+        "t": 69.0513119930009
+      },
+      {
+        "frame": 3354,
+        "x": 252.25982666015625,
+        "y": 141.3521728515625,
+        "t": 69.11313053551925
+      },
+      {
+        "frame": 3357,
+        "x": 236.97840881347656,
+        "y": 173.09490966796875,
+        "t": 69.1749490780376
+      },
+      {
+        "frame": 3360,
+        "x": 221.530900243309,
+        "y": 203.15474452554744,
+        "t": 69.23676762055595
+      },
+      {
+        "frame": 3363,
+        "x": 205.45089721679688,
+        "y": 248.63037109375,
+        "t": 69.2985861630743
+      },
+      {
+        "frame": 3366,
+        "x": 198.90182495117188,
+        "y": 244.83941650390625,
+        "t": 69.36040470559266
+      },
+      {
+        "frame": 3369,
+        "x": 201.23085021972656,
+        "y": 241.469970703125,
+        "t": 69.42222324811101
+      },
+      {
+        "frame": 3372,
+        "x": 205.10882568359375,
+        "y": 242.4346923828125,
+        "t": 69.48404179062936
+      },
+      {
+        "frame": 3375,
+        "x": 209.06161499023438,
+        "y": 249.73834228515625,
+        "t": 69.54586033314771
+      },
+      {
+        "frame": 3378,
+        "x": 215.70068359375,
+        "y": 261.1214599609375,
+        "t": 69.60767887566607
+      },
+      {
+        "frame": 3381,
+        "x": 221.04931640625,
+        "y": 259.65509033203125,
+        "t": 69.66949741818442
+      },
+      {
+        "frame": 3384,
+        "x": 226.8758544921875,
+        "y": 259.74822998046875,
+        "t": 69.73131596070277
+      },
+      {
+        "frame": 3387,
+        "x": 232.04275512695312,
+        "y": 266.8394775390625,
+        "t": 69.79313450322113
+      },
+      {
+        "frame": 3390,
+        "x": 234.74432373046875,
+        "y": 269.69873046875,
+        "t": 69.85495304573949
+      },
+      {
+        "frame": 3393,
+        "x": 236.34713745117188,
+        "y": 271.4667053222656,
+        "t": 69.91677158825784
+      },
+      {
+        "frame": 3396,
+        "x": 233.3849334716797,
+        "y": 273.53961181640625,
+        "t": 69.9785901307762
+      },
+      {
+        "frame": 3399,
+        "x": 228.58935546875,
+        "y": 273.759033203125,
+        "t": 70.04040867329455
+      },
+      {
+        "frame": 3402,
+        "x": 221.55245971679688,
+        "y": 272.85601806640625,
+        "t": 70.1022272158129
+      },
+      {
+        "frame": 3405,
+        "x": 210.3619842529297,
+        "y": 272.9704284667969,
+        "t": 70.16404575833126
+      },
+      {
+        "frame": 3408,
+        "x": 207.77410888671875,
+        "y": 273.79296875,
+        "t": 70.22586430084961
+      },
+      {
+        "frame": 3411,
+        "x": 215.6565704345703,
+        "y": 271.09881591796875,
+        "t": 70.28768284336796
+      },
+      {
+        "frame": 3414,
+        "x": 222.37466430664062,
+        "y": 272.88909912109375,
+        "t": 70.34950138588631
+      },
+      {
+        "frame": 3417,
+        "x": 225.81356811523438,
+        "y": 276.658203125,
+        "t": 70.41131992840467
+      },
+      {
+        "frame": 3420,
+        "x": 226.91812133789062,
+        "y": 275.02447509765625,
+        "t": 70.47313847092302
+      },
+      {
+        "frame": 3423,
+        "x": 224.0436553955078,
+        "y": 275.69244384765625,
+        "t": 70.53495701344137
+      },
+      {
+        "frame": 3426,
+        "x": 219.07073974609375,
+        "y": 274.62554931640625,
+        "t": 70.59677555595972
+      },
+      {
+        "frame": 3429,
+        "x": 212.91461181640625,
+        "y": 272.5272216796875,
+        "t": 70.65859409847808
+      },
+      {
+        "frame": 3432,
+        "x": 205.03457641601562,
+        "y": 272.47283935546875,
+        "t": 70.72041264099643
+      },
+      {
+        "frame": 3435,
+        "x": 208.3455810546875,
+        "y": 273.221435546875,
+        "t": 70.78223118351478
+      },
+      {
+        "frame": 3438,
+        "x": 219.45001220703125,
+        "y": 268.21527099609375,
+        "t": 70.84404972603315
+      },
+      {
+        "frame": 3441,
+        "x": 226.7095947265625,
+        "y": 268.19354248046875,
+        "t": 70.9058682685515
+      },
+      {
+        "frame": 3444,
+        "x": 231.7981719970703,
+        "y": 269.55755615234375,
+        "t": 70.96768681106985
+      },
+      {
+        "frame": 3447,
+        "x": 235.5941162109375,
+        "y": 265.7315673828125,
+        "t": 71.0295053535882
+      },
+      {
+        "frame": 3450,
+        "x": 238.29583740234375,
+        "y": 265.62646484375,
+        "t": 71.09132389610656
+      },
+      {
+        "frame": 3453,
+        "x": 242.77102661132812,
+        "y": 266.6254577636719,
+        "t": 71.15314243862491
+      },
+      {
+        "frame": 3456,
+        "x": 247.121337890625,
+        "y": 265.6585693359375,
+        "t": 71.21496098114326
+      },
+      {
+        "frame": 3459,
+        "x": 254.56056213378906,
+        "y": 267.7355651855469,
+        "t": 71.27677952366162
+      },
+      {
+        "frame": 3462,
+        "x": 263.9394226074219,
+        "y": 266.88604736328125,
+        "t": 71.33859806617997
+      },
+      {
+        "frame": 3465,
+        "x": 275.6300048828125,
+        "y": 267.29193115234375,
+        "t": 71.40041660869832
+      },
+      {
+        "frame": 3468,
+        "x": 289.0972900390625,
+        "y": 267.74884033203125,
+        "t": 71.46223515121667
+      },
+      {
+        "frame": 3474,
+        "x": 310.1741638183594,
+        "y": 266.72314453125,
+        "t": 71.58587223625338
+      },
+      {
+        "frame": 3477,
+        "x": 314.179931640625,
+        "y": 268.79736328125,
+        "t": 71.64769077877173
+      },
+      {
+        "frame": 3480,
+        "x": 314.5561218261719,
+        "y": 270.11822509765625,
+        "t": 71.70950932129008
+      },
+      {
+        "frame": 3483,
+        "x": 313.28924560546875,
+        "y": 274.19476318359375,
+        "t": 71.77132786380845
+      },
+      {
+        "frame": 3486,
+        "x": 312.02435302734375,
+        "y": 278.11376953125,
+        "t": 71.8331464063268
+      },
+      {
+        "frame": 3489,
+        "x": 315.96575927734375,
+        "y": 279.9426574707031,
+        "t": 71.89496494884516
+      },
+      {
+        "frame": 3492,
+        "x": 319.4189758300781,
+        "y": 280.80804443359375,
+        "t": 71.95678349136351
+      },
+      {
+        "frame": 3495,
+        "x": 324.92449951171875,
+        "y": 283.1407470703125,
+        "t": 72.01860203388186
+      },
+      {
+        "frame": 3498,
+        "x": 331.57965087890625,
+        "y": 283.95269775390625,
+        "t": 72.08042057640021
+      },
+      {
+        "frame": 3501,
+        "x": 337.86883544921875,
+        "y": 283.24066162109375,
+        "t": 72.14223911891857
+      },
+      {
+        "frame": 3504,
+        "x": 343.327880859375,
+        "y": 283.2978820800781,
+        "t": 72.20405766143692
+      },
+      {
+        "frame": 3507,
+        "x": 339.4985656738281,
+        "y": 283.0775451660156,
+        "t": 72.26587620395527
+      },
+      {
+        "frame": 3510,
+        "x": 330.8046569824219,
+        "y": 284.243896484375,
+        "t": 72.32769474647363
+      },
+      {
+        "frame": 3513,
+        "x": 322.9990234375,
+        "y": 283.4178771972656,
+        "t": 72.38951328899198
+      },
+      {
+        "frame": 3516,
+        "x": 319.2969055175781,
+        "y": 281.79522705078125,
+        "t": 72.45133183151033
+      },
+      {
+        "frame": 3522,
+        "x": 250.75254821777344,
+        "y": 287.1181945800781,
+        "t": 72.57496891654704
+      },
+      {
+        "frame": 3525,
+        "x": 212.30545043945312,
+        "y": 289.8841552734375,
+        "t": 72.63678745906539
+      },
+      {
+        "frame": 3528,
+        "x": 187.73492431640625,
+        "y": 290.0289306640625,
+        "t": 72.69860600158374
+      },
+      {
+        "frame": 3531,
+        "x": 174.26873779296875,
+        "y": 289.78240966796875,
+        "t": 72.76042454410211
+      },
+      {
+        "frame": 3534,
+        "x": 168.08741760253906,
+        "y": 290.76544189453125,
+        "t": 72.82224308662046
+      },
+      {
+        "frame": 3537,
+        "x": 163.84185791015625,
+        "y": 292.291015625,
+        "t": 72.88406162913881
+      },
+      {
+        "frame": 3540,
+        "x": 165.68099975585938,
+        "y": 293.95831298828125,
+        "t": 72.94588017165717
+      },
+      {
+        "frame": 3543,
+        "x": 171.72821044921875,
+        "y": 291.92041015625,
+        "t": 73.00769871417552
+      },
+      {
+        "frame": 3546,
+        "x": 181.04310607910156,
+        "y": 290.71624755859375,
+        "t": 73.06951725669387
+      },
+      {
+        "frame": 3549,
+        "x": 190.9853515625,
+        "y": 287.96917724609375,
+        "t": 73.13133579921222
+      },
+      {
+        "frame": 3552,
+        "x": 202.35702514648438,
+        "y": 284.0443115234375,
+        "t": 73.19315434173058
+      },
+      {
+        "frame": 3555,
+        "x": 213.2738037109375,
+        "y": 282.68316650390625,
+        "t": 73.25497288424893
+      },
+      {
+        "frame": 3558,
+        "x": 221.35435485839844,
+        "y": 280.92901611328125,
+        "t": 73.31679142676728
+      },
+      {
+        "frame": 3615,
+        "x": 306.1340637207031,
+        "y": 147.05877685546875,
+        "t": 74.491343734616
+      },
+      {
+        "frame": 3618,
+        "x": 338.0165289256198,
+        "y": 144.28650137741047,
+        "t": 74.55316227713435
+      },
+      {
+        "frame": 3624,
+        "x": 266.4618835449219,
+        "y": 169.24658203125,
+        "t": 74.67679936217107
+      },
+      {
+        "frame": 3630,
+        "x": 293.2277353689567,
+        "y": 133.51653944020356,
+        "t": 74.80043644720777
+      },
+      {
+        "frame": 3639,
+        "x": 225.96896362304688,
+        "y": 174.9141845703125,
+        "t": 74.98589207476283
+      },
+      {
+        "frame": 3657,
+        "x": 195.94322204589844,
+        "y": 188.56497192382812,
+        "t": 75.35680332987295
+      },
+      {
+        "frame": 3660,
+        "x": 192.3107147216797,
+        "y": 192.03713989257812,
+        "t": 75.4186218723913
+      },
+      {
+        "frame": 3672,
+        "x": 212.39617919921875,
+        "y": 195.13723754882812,
+        "t": 75.66589604246472
+      },
+      {
+        "frame": 3714,
+        "x": 266.84210205078125,
+        "y": 200.83609008789062,
+        "t": 76.53135563772166
+      },
+      {
+        "frame": 3717,
+        "x": 290.4639892578125,
+        "y": 201.98739624023438,
+        "t": 76.59317418024003
+      },
+      {
+        "frame": 3720,
+        "x": 315.4124293785311,
+        "y": 169.07909604519773,
+        "t": 76.65499272275838
+      },
+      {
+        "frame": 3726,
+        "x": 351.901611328125,
+        "y": 209.44091796875,
+        "t": 76.77862980779508
+      },
+      {
+        "frame": 3735,
+        "x": 412.6806640625,
+        "y": 215.40911865234375,
+        "t": 76.96408543535014
+      },
+      {
+        "frame": 3738,
+        "x": 430.15106201171875,
+        "y": 216.68649291992188,
+        "t": 77.0259039778685
+      },
+      {
+        "frame": 3741,
+        "x": 446.00299072265625,
+        "y": 218.37081909179688,
+        "t": 77.08772252038685
+      },
+      {
+        "frame": 3744,
+        "x": 461.4263000488281,
+        "y": 219.26043701171875,
+        "t": 77.1495410629052
+      },
+      {
+        "frame": 3747,
+        "x": 476.4297790527344,
+        "y": 221.55487060546875,
+        "t": 77.21135960542355
+      },
+      {
+        "frame": 3774,
+        "x": 620.9450073242188,
+        "y": 166.067138671875,
+        "t": 77.76772648808874
+      },
+      {
+        "frame": 3777,
+        "x": 617.224609375,
+        "y": 166.145751953125,
+        "t": 77.8295450306071
+      },
+      {
+        "frame": 3780,
+        "x": 613.4397583007812,
+        "y": 166.2684326171875,
+        "t": 77.89136357312545
+      },
+      {
+        "frame": 3783,
+        "x": 610.7631225585938,
+        "y": 165.8040771484375,
+        "t": 77.9531821156438
+      },
+      {
+        "frame": 3789,
+        "x": 603.8690185546875,
+        "y": 165.45404052734375,
+        "t": 78.0768192006805
+      },
+      {
+        "frame": 3798,
+        "x": 595.750244140625,
+        "y": 165.46102905273438,
+        "t": 78.26227482823556
+      },
+      {
+        "frame": 3801,
+        "x": 593.8726806640625,
+        "y": 165.71200561523438,
+        "t": 78.32409337075391
+      },
+      {
+        "frame": 3807,
+        "x": 589.182373046875,
+        "y": 165.92987060546875,
+        "t": 78.44773045579062
+      },
+      {
+        "frame": 3810,
+        "x": 444.51922607421875,
+        "y": 212.7508544921875,
+        "t": 78.50954899830897
+      },
+      {
+        "frame": 3813,
+        "x": 433.5540771484375,
+        "y": 210.30087280273438,
+        "t": 78.57136754082734
+      },
+      {
+        "frame": 3816,
+        "x": 422.7286682128906,
+        "y": 207.87884521484375,
+        "t": 78.63318608334569
+      },
+      {
+        "frame": 3819,
+        "x": 412.3130798339844,
+        "y": 206.32666015625,
+        "t": 78.69500462586404
+      },
+      {
+        "frame": 3834,
+        "x": 368.1559829059829,
+        "y": 167.71581196581195,
+        "t": 79.00409733845581
+      },
+      {
+        "frame": 3879,
+        "x": 367.5550231933594,
+        "y": 207.91925048828125,
+        "t": 79.93137547623111
+      },
+      {
+        "frame": 3882,
+        "x": 356.42315673828125,
+        "y": 205.45806884765625,
+        "t": 79.99319401874946
+      },
+      {
+        "frame": 3885,
+        "x": 346.05908203125,
+        "y": 202.83108520507812,
+        "t": 80.05501256126782
+      },
+      {
+        "frame": 3894,
+        "x": 323.6363636363636,
+        "y": 191.18732782369145,
+        "t": 80.24046818882287
+      },
+      {
+        "frame": 3897,
+        "x": 307.8277282714844,
+        "y": 193.82867431640625,
+        "t": 80.30228673134123
+      },
+      {
+        "frame": 3906,
+        "x": 265.9040404040404,
+        "y": 149.5016835016835,
+        "t": 80.4877423588963
+      },
+      {
+        "frame": 3948,
+        "x": 251.31654357910156,
+        "y": 190.9959716796875,
+        "t": 81.35320195415323
+      },
+      {
+        "frame": 3951,
+        "x": 251.3809814453125,
+        "y": 191.10333251953125,
+        "t": 81.4150204966716
+      },
+      {
+        "frame": 3954,
+        "x": 250.8531494140625,
+        "y": 191.30838012695312,
+        "t": 81.47683903918995
+      },
+      {
+        "frame": 3960,
+        "x": 250.5185089111328,
+        "y": 191.91943359375,
+        "t": 81.60047612422666
+      },
+      {
+        "frame": 4026,
+        "x": 294.18914794921875,
+        "y": 207.81878662109375,
+        "t": 82.96048405963043
+      },
+      {
+        "frame": 4038,
+        "x": 312.37700145560405,
+        "y": 217.87190684133915,
+        "t": 83.20775822970384
+      },
+      {
+        "frame": 4050,
+        "x": 316.06543967280163,
+        "y": 216.11451942740285,
+        "t": 83.45503239977727
+      },
+      {
+        "frame": 4062,
+        "x": 319.311499272198,
+        "y": 218.2008733624454,
+        "t": 83.70230656985068
+      },
+      {
+        "frame": 4080,
+        "x": 307.2799072265625,
+        "y": 247.25454711914062,
+        "t": 84.07321782496079
+      },
+      {
+        "frame": 4083,
+        "x": 305.95916748046875,
+        "y": 247.9996337890625,
+        "t": 84.13503636747915
+      },
+      {
+        "frame": 4086,
+        "x": 327.94161958568736,
+        "y": 224.6045197740113,
+        "t": 84.1968549099975
+      },
+      {
+        "frame": 4146,
+        "x": 251.6981964111328,
+        "y": 320.6275634765625,
+        "t": 85.43322576036458
+      },
+      {
+        "frame": 4149,
+        "x": 248.8440399169922,
+        "y": 326.4927062988281,
+        "t": 85.49504430288293
+      },
+      {
+        "frame": 4152,
+        "x": 251.57542419433594,
+        "y": 328.059814453125,
+        "t": 85.55686284540128
+      },
+      {
+        "frame": 4155,
+        "x": 252.59115600585938,
+        "y": 332.26226806640625,
+        "t": 85.61868138791964
+      },
+      {
+        "frame": 4158,
+        "x": 258.9019775390625,
+        "y": 331.71014404296875,
+        "t": 85.68049993043799
+      },
+      {
+        "frame": 4161,
+        "x": 263.35120391845703,
+        "y": 331.5297546386719,
+        "t": 85.74231847295634
+      },
+      {
+        "frame": 4164,
+        "x": 271.1805725097656,
+        "y": 334.19415283203125,
+        "t": 85.8041370154747
+      },
+      {
+        "frame": 4167,
+        "x": 280.14947509765625,
+        "y": 334.02618408203125,
+        "t": 85.86595555799305
+      },
+      {
+        "frame": 4170,
+        "x": 289.68743896484375,
+        "y": 334.6669921875,
+        "t": 85.9277741005114
+      },
+      {
+        "frame": 4173,
+        "x": 300.22039794921875,
+        "y": 333.42803955078125,
+        "t": 85.98959264302975
+      },
+      {
+        "frame": 4176,
+        "x": 311.19573974609375,
+        "y": 333.46368408203125,
+        "t": 86.0514111855481
+      },
+      {
+        "frame": 4179,
+        "x": 288.35809326171875,
+        "y": 333.3503112792969,
+        "t": 86.11322972806646
+      },
+      {
+        "frame": 4182,
+        "x": 271.9663619995117,
+        "y": 331.33526611328125,
+        "t": 86.17504827058481
+      },
+      {
+        "frame": 4185,
+        "x": 259.81085205078125,
+        "y": 328.931884765625,
+        "t": 86.23686681310318
+      },
+      {
+        "frame": 4188,
+        "x": 253.71791076660156,
+        "y": 327.12628173828125,
+        "t": 86.29868535562153
+      },
+      {
+        "frame": 4191,
+        "x": 255.77133178710938,
+        "y": 320.77978515625,
+        "t": 86.36050389813988
+      },
+      {
+        "frame": 4194,
+        "x": 259.5510559082031,
+        "y": 320.23529052734375,
+        "t": 86.42232244065823
+      },
+      {
+        "frame": 4197,
+        "x": 270.1858444213867,
+        "y": 317.7912902832031,
+        "t": 86.48414098317659
+      },
+      {
+        "frame": 4200,
+        "x": 282.4390563964844,
+        "y": 311.5026550292969,
+        "t": 86.54595952569494
+      },
+      {
+        "frame": 4203,
+        "x": 294.80364990234375,
+        "y": 310.9892883300781,
+        "t": 86.60777806821329
+      },
+      {
+        "frame": 4206,
+        "x": 306.4017028808594,
+        "y": 314.8758544921875,
+        "t": 86.66959661073165
+      },
+      {
+        "frame": 4209,
+        "x": 317.9708251953125,
+        "y": 312.4266052246094,
+        "t": 86.73141515325
+      },
+      {
+        "frame": 4212,
+        "x": 308.6306457519531,
+        "y": 307.4776916503906,
+        "t": 86.79323369576835
+      },
+      {
+        "frame": 4215,
+        "x": 300.12933349609375,
+        "y": 308.2633972167969,
+        "t": 86.8550522382867
+      },
+      {
+        "frame": 4218,
+        "x": 292.2352600097656,
+        "y": 315.7574462890625,
+        "t": 86.91687078080506
+      },
+      {
+        "frame": 4221,
+        "x": 277.0437545776367,
+        "y": 313.68560791015625,
+        "t": 86.97868932332341
+      },
+      {
+        "frame": 4224,
+        "x": 248.2133026123047,
+        "y": 314.0701904296875,
+        "t": 87.04050786584176
+      },
+      {
+        "frame": 4227,
+        "x": 220.81729125976562,
+        "y": 316.3453369140625,
+        "t": 87.10232640836011
+      },
+      {
+        "frame": 4230,
+        "x": 193.19082641601562,
+        "y": 313.969970703125,
+        "t": 87.16414495087847
+      },
+      {
+        "frame": 4233,
+        "x": 174.6552734375,
+        "y": 317.2752685546875,
+        "t": 87.22596349339683
+      },
+      {
+        "frame": 4236,
+        "x": 163.89120483398438,
+        "y": 317.0772399902344,
+        "t": 87.28778203591519
+      },
+      {
+        "frame": 4239,
+        "x": 158.88784790039062,
+        "y": 315.77288818359375,
+        "t": 87.34960057843354
+      },
+      {
+        "frame": 4242,
+        "x": 157.43218994140625,
+        "y": 317.98724365234375,
+        "t": 87.41141912095189
+      },
+      {
+        "frame": 4245,
+        "x": 164.76849365234375,
+        "y": 315.50091552734375,
+        "t": 87.47323766347024
+      },
+      {
+        "frame": 4248,
+        "x": 174.47869873046875,
+        "y": 315.55792236328125,
+        "t": 87.5350562059886
+      },
+      {
+        "frame": 4251,
+        "x": 187.55117797851562,
+        "y": 318.89227294921875,
+        "t": 87.59687474850695
+      },
+      {
+        "frame": 4254,
+        "x": 204.0772247314453,
+        "y": 315.71527099609375,
+        "t": 87.6586932910253
+      },
+      {
+        "frame": 4257,
+        "x": 217.94161987304688,
+        "y": 315.999755859375,
+        "t": 87.72051183354365
+      },
+      {
+        "frame": 4260,
+        "x": 255.0077071290944,
+        "y": 293.9219653179191,
+        "t": 87.782330376062
+      },
+      {
+        "frame": 4263,
+        "x": 221.1990509033203,
+        "y": 311.7607421875,
+        "t": 87.84414891858036
+      },
+      {
+        "frame": 4266,
+        "x": 221.36610412597656,
+        "y": 310.2745056152344,
+        "t": 87.90596746109871
+      },
+      {
+        "frame": 4269,
+        "x": 227.26959228515625,
+        "y": 306.65863037109375,
+        "t": 87.96778600361706
+      },
+      {
+        "frame": 4278,
+        "x": 244.63101196289062,
+        "y": 300.03460693359375,
+        "t": 88.15324163117214
+      },
+      {
+        "frame": 4281,
+        "x": 247.8050079345703,
+        "y": 298.6775207519531,
+        "t": 88.21506017369049
+      },
+      {
+        "frame": 4284,
+        "x": 249.4838104248047,
+        "y": 297.8009338378906,
+        "t": 88.27687871620884
+      },
+      {
+        "frame": 4287,
+        "x": 252.7454833984375,
+        "y": 296.6436767578125,
+        "t": 88.3386972587272
+      },
+      {
+        "frame": 4290,
+        "x": 250.08657836914062,
+        "y": 295.01141357421875,
+        "t": 88.40051580124555
+      },
+      {
+        "frame": 4293,
+        "x": 247.8729705810547,
+        "y": 294.6155090332031,
+        "t": 88.4623343437639
+      },
+      {
+        "frame": 4296,
+        "x": 246.06008911132812,
+        "y": 293.9168701171875,
+        "t": 88.52415288628225
+      },
+      {
+        "frame": 4317,
+        "x": 271.20941162109375,
+        "y": 318.23773193359375,
+        "t": 88.95688268391072
+      },
+      {
+        "frame": 4326,
+        "x": 275.0411071777344,
+        "y": 319.0589294433594,
+        "t": 89.14233831146579
+      },
+      {
+        "frame": 4329,
+        "x": 276.18670654296875,
+        "y": 319.0702209472656,
+        "t": 89.20415685398414
+      },
+      {
+        "frame": 4332,
+        "x": 277.144775390625,
+        "y": 319.43731689453125,
+        "t": 89.2659753965025
+      },
+      {
+        "frame": 4335,
+        "x": 278.11572265625,
+        "y": 319.721923828125,
+        "t": 89.32779393902085
+      },
+      {
+        "frame": 4338,
+        "x": 277.5577392578125,
+        "y": 319.50048828125,
+        "t": 89.3896124815392
+      },
+      {
+        "frame": 4344,
+        "x": 276.3314208984375,
+        "y": 319.404296875,
+        "t": 89.51324956657591
+      },
+      {
+        "frame": 4347,
+        "x": 275.7978515625,
+        "y": 319.396240234375,
+        "t": 89.57506810909426
+      },
+      {
+        "frame": 4362,
+        "x": 262.9935004642525,
+        "y": 296.8458681522748,
+        "t": 89.88416082168602
+      },
+      {
+        "frame": 4398,
+        "x": 253.5470428466797,
+        "y": 311.20294189453125,
+        "t": 90.62598333190627
+      },
+      {
+        "frame": 4401,
+        "x": 252.78118896484375,
+        "y": 313.3729248046875,
+        "t": 90.68780187442462
+      },
+      {
+        "frame": 4404,
+        "x": 251.86276245117188,
+        "y": 314.0912170410156,
+        "t": 90.74962041694297
+      },
+      {
+        "frame": 4407,
+        "x": 250.66819763183594,
+        "y": 312.24957275390625,
+        "t": 90.81143895946133
+      },
+      {
+        "frame": 4410,
+        "x": 249.26358032226562,
+        "y": 310.7918701171875,
+        "t": 90.87325750197968
+      },
+      {
+        "frame": 4638,
+        "x": 209.69479370117188,
+        "y": 225.77276611328125,
+        "t": 95.57146673337455
+      },
+      {
+        "frame": 4650,
+        "x": 228.34967041015625,
+        "y": 230.20257568359375,
+        "t": 95.81874090344796
+      },
+      {
+        "frame": 4656,
+        "x": 235.57156372070312,
+        "y": 233.146728515625,
+        "t": 95.94237798848468
+      },
+      {
+        "frame": 4674,
+        "x": 243.2520751953125,
+        "y": 238.94195556640625,
+        "t": 96.3132892435948
+      },
+      {
+        "frame": 4677,
+        "x": 243.6119384765625,
+        "y": 239.94940185546875,
+        "t": 96.37510778611315
+      },
+      {
+        "frame": 4680,
+        "x": 244.1531982421875,
+        "y": 240.62261962890625,
+        "t": 96.4369263286315
+      },
+      {
+        "frame": 4683,
+        "x": 245.2522735595703,
+        "y": 241.3118896484375,
+        "t": 96.49874487114985
+      },
+      {
+        "frame": 4698,
+        "x": 217.33047485351562,
+        "y": 255.01278686523438,
+        "t": 96.80783758374162
+      },
+      {
+        "frame": 4704,
+        "x": 197.4663848876953,
+        "y": 262.9654235839844,
+        "t": 96.93147466877834
+      },
+      {
+        "frame": 4707,
+        "x": 188.06980895996094,
+        "y": 267.19256591796875,
+        "t": 96.99329321129669
+      },
+      {
+        "frame": 4710,
+        "x": 178.76968383789062,
+        "y": 270.5018310546875,
+        "t": 97.05511175381504
+      },
+      {
+        "frame": 4713,
+        "x": 169.28076171875,
+        "y": 274.9393005371094,
+        "t": 97.1169302963334
+      },
+      {
+        "frame": 4761,
+        "x": 119.087890625,
+        "y": 274.36138916015625,
+        "t": 98.10602697662705
+      },
+      {
+        "frame": 4764,
+        "x": 118.15083312988281,
+        "y": 274.20257568359375,
+        "t": 98.1678455191454
+      },
+      {
+        "frame": 4767,
+        "x": 117.30165100097656,
+        "y": 273.8656311035156,
+        "t": 98.22966406166375
+      },
+      {
+        "frame": 4770,
+        "x": 115.77847290039062,
+        "y": 273.1773681640625,
+        "t": 98.29148260418211
+      },
+      {
+        "frame": 4773,
+        "x": 115.41738891601562,
+        "y": 272.73809814453125,
+        "t": 98.35330114670046
+      },
+      {
+        "frame": 4776,
+        "x": 115.96156311035156,
+        "y": 272.0812683105469,
+        "t": 98.41511968921881
+      },
+      {
+        "frame": 4869,
+        "x": 186.51803588867188,
+        "y": 245.29840087890625,
+        "t": 100.33149450728777
+      },
+      {
+        "frame": 4878,
+        "x": 207.26819923371647,
+        "y": 197.4750957854406,
+        "t": 100.51695013484283
+      },
+      {
+        "frame": 4881,
+        "x": 244.1269989013672,
+        "y": 221.4814453125,
+        "t": 100.57876867736118
+      },
+      {
+        "frame": 4884,
+        "x": 222.1342383107089,
+        "y": 242.98642533936652,
+        "t": 100.64058721987954
+      },
+      {
+        "frame": 4890,
+        "x": 223.15009746588694,
+        "y": 245.07797270955166,
+        "t": 100.76422430491625
+      },
+      {
+        "frame": 4905,
+        "x": 315.1884765625,
+        "y": 190.67349243164062,
+        "t": 101.07331701750802
+      },
+      {
+        "frame": 4992,
+        "x": 290.29962158203125,
+        "y": 174.94000244140625,
+        "t": 102.86605475054027
+      },
+      {
+        "frame": 5001,
+        "x": 282.37432861328125,
+        "y": 176.79238891601562,
+        "t": 103.05151037809533
+      },
+      {
+        "frame": 5031,
+        "x": 274.2489318847656,
+        "y": 169.15756225585938,
+        "t": 103.66969580327887
+      },
+      {
+        "frame": 5052,
+        "x": 637.2628173828125,
+        "y": 247.66107177734375,
+        "t": 104.10242560090734
+      },
+      {
+        "frame": 5055,
+        "x": 637.05322265625,
+        "y": 246.5828857421875,
+        "t": 104.16424414342569
+      },
+      {
+        "frame": 5205,
+        "x": 195.77340698242188,
+        "y": 142.98284912109375,
+        "t": 107.25517126934336
+      },
+      {
+        "frame": 5223,
+        "x": 140.4939727783203,
+        "y": 150.55426025390625,
+        "t": 107.6260825244535
+      },
+      {
+        "frame": 5250,
+        "x": 101.33195495605469,
+        "y": 157.473388671875,
+        "t": 108.18244940711867
+      },
+      {
+        "frame": 5253,
+        "x": 99.07965087890625,
+        "y": 158.31585693359375,
+        "t": 108.24426794963702
+      },
+      {
+        "frame": 5259,
+        "x": 93.48692321777344,
+        "y": 159.16461181640625,
+        "t": 108.36790503467373
+      },
+      {
+        "frame": 5262,
+        "x": 91.25801086425781,
+        "y": 159.03485107421875,
+        "t": 108.42972357719209
+      },
+      {
+        "frame": 5265,
+        "x": 86.84162139892578,
+        "y": 159.58697509765625,
+        "t": 108.49154211971045
+      },
+      {
+        "frame": 5268,
+        "x": 85.88014221191406,
+        "y": 160.7232666015625,
+        "t": 108.5533606622288
+      },
+      {
+        "frame": 5271,
+        "x": 83.68559265136719,
+        "y": 160.2906494140625,
+        "t": 108.61517920474715
+      },
+      {
+        "frame": 5799,
+        "x": 635.7704467773438,
+        "y": 108.85113525390625,
+        "t": 119.49524268797737
+      },
+      {
+        "frame": 5808,
+        "x": 592.7389162561576,
+        "y": 105.30706075533661,
+        "t": 119.68069831553242
+      }
+    ]
+  },
+  "pass_events": [
+    {
+      "frame": 594,
+      "from_id": 1,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 12.240071418633999,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 687,
+      "from_id": 28,
+      "to_id": 42,
+      "team": "A",
+      "timestamp": 14.156446236702958,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 708,
+      "from_id": 42,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 14.589176034331432,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 717,
+      "from_id": 28,
+      "to_id": 42,
+      "team": "A",
+      "timestamp": 14.774631661886493,
+      "distance_px": 221.3,
+      "distance_m": 36.3,
+      "direction": "forward",
+      "success": true,
+      "key_pass": true
+    },
+    {
+      "frame": 726,
+      "from_id": 42,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 14.960087289441553,
+      "distance_px": 231.4,
+      "distance_m": 38.0,
+      "direction": "backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 948,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 19.534659435799714,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 1155,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 23.80013886956611,
+      "distance_px": 70.0,
+      "distance_m": 11.5,
+      "direction": "forward",
+      "success": true,
+      "key_pass": true
+    },
+    {
+      "frame": 1212,
+      "from_id": 28,
+      "to_id": 41,
+      "team": "A",
+      "timestamp": 24.974691177414826,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 1293,
+      "from_id": 41,
+      "to_id": 41,
+      "team": "B",
+      "timestamp": 26.64379182541037,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 1404,
+      "from_id": 28,
+      "to_id": 1,
+      "team": "A",
+      "timestamp": 28.93107789858945,
+      "distance_px": 93.4,
+      "distance_m": 15.3,
+      "direction": "diagonal_forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 1416,
+      "from_id": 41,
+      "to_id": 1,
+      "team": "A",
+      "timestamp": 29.178352068662864,
+      "distance_px": 137.7,
+      "distance_m": 22.6,
+      "direction": "forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 1575,
+      "from_id": 1,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 32.4547348221356,
+      "distance_px": 71.7,
+      "distance_m": 11.8,
+      "direction": "forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 1647,
+      "from_id": 1,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 33.93837984257608,
+      "distance_px": 28.7,
+      "distance_m": 4.7,
+      "direction": "lateral",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 1662,
+      "from_id": 28,
+      "to_id": 1,
+      "team": "A",
+      "timestamp": 34.24747255516785,
+      "distance_px": 30.1,
+      "distance_m": 4.9,
+      "direction": "diagonal_backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 1887,
+      "from_id": 28,
+      "to_id": 41,
+      "team": "B",
+      "timestamp": 38.88386324404437,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 2331,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 48.03300753676069,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 2616,
+      "from_id": 28,
+      "to_id": 113,
+      "team": "B",
+      "timestamp": 53.905769076004276,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 2682,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 55.265777011408055,
+      "distance_px": 540.8,
+      "distance_m": 88.7,
+      "direction": "forward",
+      "success": true,
+      "key_pass": true
+    },
+    {
+      "frame": 2790,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 57.49124454206878,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 2817,
+      "from_id": 94,
+      "to_id": 129,
+      "team": "A",
+      "timestamp": 58.047611424733965,
+      "distance_px": 145.0,
+      "distance_m": 23.8,
+      "direction": "forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 2832,
+      "from_id": 129,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 58.35670413732573,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 2856,
+      "from_id": 129,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 58.851252477472556,
+      "distance_px": 20.5,
+      "distance_m": 3.4,
+      "direction": "diagonal_forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 2877,
+      "from_id": 28,
+      "to_id": 1,
+      "team": "A",
+      "timestamp": 59.28398227510103,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 2919,
+      "from_id": 28,
+      "to_id": 78,
+      "team": "A",
+      "timestamp": 60.14944187035798,
+      "distance_px": 185.5,
+      "distance_m": 30.4,
+      "direction": "diagonal_backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 2928,
+      "from_id": 78,
+      "to_id": 78,
+      "team": "A",
+      "timestamp": 60.33489749791304,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3159,
+      "from_id": 194,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 65.09492527182627,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3177,
+      "from_id": 28,
+      "to_id": 194,
+      "team": "A",
+      "timestamp": 65.46583652693639,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3324,
+      "from_id": 194,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 68.4949451103357,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3615,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 74.491343734616,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3639,
+      "from_id": 171,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 74.98589207476283,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3723,
+      "from_id": 28,
+      "to_id": 171,
+      "team": "A",
+      "timestamp": 76.71681126527673,
+      "distance_px": 43.4,
+      "distance_m": 7.1,
+      "direction": "lateral",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3744,
+      "from_id": 161,
+      "to_id": 180,
+      "team": "A",
+      "timestamp": 77.1495410629052,
+      "distance_px": 68.3,
+      "distance_m": 11.2,
+      "direction": "diagonal_forward",
+      "success": true,
+      "key_pass": true
+    },
+    {
+      "frame": 3816,
+      "from_id": 161,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 78.63318608334569,
+      "distance_px": 73.2,
+      "distance_m": 12.0,
+      "direction": "backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3834,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 79.00409733845581,
+      "distance_px": 26.7,
+      "distance_m": 4.4,
+      "direction": "diagonal_backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3879,
+      "from_id": 41,
+      "to_id": 41,
+      "team": "B",
+      "timestamp": 79.93137547623111,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 3885,
+      "from_id": 41,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 80.05501256126782,
+      "distance_px": 73.5,
+      "distance_m": 12.1,
+      "direction": "backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3900,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 80.36410527385958,
+      "distance_px": 42.2,
+      "distance_m": 6.9,
+      "direction": "diagonal_backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3906,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 80.4877423588963,
+      "distance_px": 22.2,
+      "distance_m": 3.6,
+      "direction": "diagonal_backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3948,
+      "from_id": 28,
+      "to_id": 194,
+      "team": "A",
+      "timestamp": 81.35320195415323,
+      "distance_px": 48.5,
+      "distance_m": 8.0,
+      "direction": "lateral",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 3972,
+      "from_id": 194,
+      "to_id": 41,
+      "team": "A",
+      "timestamp": 81.84775029430007,
+      "distance_px": 20.7,
+      "distance_m": 3.4,
+      "direction": "diagonal_forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 4089,
+      "from_id": 194,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 84.25867345251585,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4317,
+      "from_id": 28,
+      "to_id": 78,
+      "team": "A",
+      "timestamp": 88.95688268391072,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4335,
+      "from_id": 78,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 89.32779393902085,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4365,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 89.94597936420438,
+      "distance_px": 46.6,
+      "distance_m": 7.6,
+      "direction": "diagonal_backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 4638,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 95.57146673337455,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4653,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "B",
+      "timestamp": 95.88055944596633,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4662,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 96.06601507352138,
+      "distance_px": 38.0,
+      "distance_m": 6.2,
+      "direction": "lateral",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 4668,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 96.18965215855809,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4701,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 96.86965612625998,
+      "distance_px": 128.6,
+      "distance_m": 21.1,
+      "direction": "backward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 4878,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 100.51695013484283,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    },
+    {
+      "frame": 4905,
+      "from_id": 28,
+      "to_id": 28,
+      "team": "A",
+      "timestamp": 101.07331701750802,
+      "distance_px": 110.0,
+      "distance_m": 18.0,
+      "direction": "forward",
+      "success": true,
+      "key_pass": false
+    },
+    {
+      "frame": 5265,
+      "from_id": 28,
+      "to_id": 194,
+      "team": "A",
+      "timestamp": 108.49154211971045,
+      "distance_px": 0,
+      "distance_m": 0,
+      "direction": "intercepted",
+      "success": false,
+      "key_pass": false
+    }
+  ],
+  "sprint_events": [
+    {
+      "pid": 28,
+      "team": "A",
+      "start_t": 62.49854648605542,
+      "end_t": 64.84765110175285,
+      "duration": 2.35,
+      "max_speed": 11.44,
+      "distance_m": 21.5
+    },
+    {
+      "pid": 194,
+      "team": "B",
+      "start_t": 117.26977515731664,
+      "end_t": 119.00069434783055,
+      "duration": 1.73,
+      "max_speed": 10.72,
+      "distance_m": 15.7
+    }
+  ],
+  "shot_events": [
+    {
+      "pid": 39,
+      "team": "A",
+      "timestamp": 13.290986641446008,
+      "frame": 645,
+      "position_x": 0.8557,
+      "position_y": 0.4184,
+      "distance_m": 15.1,
+      "ball_speed": 9.5,
+      "on_target": false,
+      "xg": 0.119
+    },
+    {
+      "pid": 118,
+      "team": "A",
+      "timestamp": 55.265777011408055,
+      "frame": 2682,
+      "position_x": 0.9501,
+      "position_y": 0.2738,
+      "distance_m": 5.2,
+      "ball_speed": 261.9,
+      "on_target": true,
+      "xg": 0.95
+    },
+    {
+      "pid": 133,
+      "team": "B",
+      "timestamp": 65.52765506945474,
+      "frame": 3180,
+      "position_x": 0.1046,
+      "position_y": 0.2459,
+      "distance_m": 11.0,
+      "ball_speed": 16.3,
+      "on_target": false,
+      "xg": 0.299
+    },
+    {
+      "pid": 232,
+      "team": "B",
+      "timestamp": 108.49154211971045,
+      "frame": 5265,
+      "position_x": 0.1357,
+      "position_y": 0.4433,
+      "distance_m": 14.2,
+      "ball_speed": 8.8,
+      "on_target": false,
+      "xg": 0.153
+    }
+  ],
+  "highlights": {
+    "goals": [],
+    "shots": [
+      {
+        "time": 13.290986641446008,
+        "team": "A",
+        "xg": 0.119,
+        "on_target": false
+      },
+      {
+        "time": 55.265777011408055,
+        "team": "A",
+        "xg": 0.95,
+        "on_target": true
+      },
+      {
+        "time": 65.52765506945474,
+        "team": "B",
+        "xg": 0.299,
+        "on_target": false
+      },
+      {
+        "time": 108.49154211971045,
+        "team": "B",
+        "xg": 0.153,
+        "on_target": false
+      }
+    ],
+    "key_passes": [
+      {
+        "time": 14.774631661886493,
+        "team": "A",
+        "from": 28,
+        "to": 42
+      },
+      {
+        "time": 23.80013886956611,
+        "team": "A",
+        "from": 28,
+        "to": 28
+      },
+      {
+        "time": 55.265777011408055,
+        "team": "A",
+        "from": 28,
+        "to": 28
+      },
+      {
+        "time": 77.1495410629052,
+        "team": "A",
+        "from": 161,
+        "to": 180
+      }
+    ]
+  }
 }

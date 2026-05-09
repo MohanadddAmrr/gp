@@ -3608,107 +3608,10 @@ with tab14:
         side_val = None if admin_side == "(none)" else admin_side
         match_id_val = None if admin_match_id == 0 else int(admin_match_id)
 
-        def _fetch_rosters():
-            with db._get_connection() as conn:
-                cur = conn.cursor()
-                if match_id_val is None:
-                    cur.execute(
-                        """
-                        SELECT roster_id, match_id, team_name, side, source, created_at, updated_at
-                        FROM rosters
-                        WHERE team_name = ?
-                        ORDER BY roster_id DESC
-                        """,
-                        (admin_team_name,),
-                    )
-                else:
-                    cur.execute(
-                        """
-                        SELECT roster_id, match_id, team_name, side, source, created_at, updated_at
-                        FROM rosters
-                        WHERE team_name = ? AND match_id = ?
-                        ORDER BY roster_id DESC
-                        """,
-                        (admin_team_name, match_id_val),
-                    )
-                rows = cur.fetchall()
-                return [
-                    dict(
-                        roster_id=r[0],
-                        match_id=r[1],
-                        team_name=r[2],
-                        side=r[3],
-                        source=r[4],
-                        created_at=r[5],
-                        updated_at=r[6],
-                    )
-                    for r in rows
-                ]
+        from services.dynamic_roster_manager import DynamicRosterManager
+        roster_mgr = DynamicRosterManager(db)
 
-        def _fetch_roster_players(roster_id: int):
-            with db._get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    """
-                    SELECT rp.roster_player_id, rp.jersey_number, rp.position, rp.is_starting,
-                           pm.player_id, pm.full_name,
-                           rp.profile_id, rp.metadata
-                    FROM roster_players rp
-                    LEFT JOIN players_master pm ON rp.player_id = pm.player_id
-                    WHERE rp.roster_id = ?
-                    ORDER BY rp.jersey_number IS NULL, rp.jersey_number ASC, rp.roster_player_id ASC
-                    """,
-                    (roster_id,),
-                )
-                rows = cur.fetchall()
-                out = []
-                for r in rows:
-                    out.append(
-                        dict(
-                            roster_player_id=r[0],
-                            jersey_number=r[1],
-                            position=r[2],
-                            is_starting=bool(r[3]) if r[3] is not None else False,
-                            player_id=r[4],
-                            full_name=r[5],
-                            profile_id=r[6],
-                            metadata=r[7],
-                        )
-                    )
-                return out
-
-        def _ensure_roster(team_name: str, side: str | None, match_id: int | None) -> int:
-            with db._get_connection() as conn:
-                cur = conn.cursor()
-                if match_id is None:
-                    cur.execute(
-                        """
-                        SELECT roster_id FROM rosters
-                        WHERE match_id IS NULL AND team_name = ? AND (side = ? OR (? IS NULL AND side IS NULL))
-                        ORDER BY roster_id DESC
-                        LIMIT 1
-                        """,
-                        (team_name, side, side),
-                    )
-                else:
-                    cur.execute(
-                        """
-                        SELECT roster_id FROM rosters
-                        WHERE match_id = ? AND team_name = ? AND (side = ? OR (? IS NULL AND side IS NULL))
-                        LIMIT 1
-                        """,
-                        (match_id, team_name, side, side),
-                    )
-                row = cur.fetchone()
-                if row:
-                    return int(row[0])
-                cur.execute(
-                    "INSERT INTO rosters (match_id, team_name, side, source) VALUES (?, ?, ?, ?)",
-                    (match_id, team_name, side, "admin"),
-                )
-                return int(cur.lastrowid)
-
-        rosters = _fetch_rosters() if admin_team_name else []
+        rosters = roster_mgr.get_all_rosters(admin_team_name, match_id_val) if admin_team_name else []
         roster_options = {
             f"Roster #{r['roster_id']} (match={r['match_id']}, side={r['side']}, source={r['source']})": r["roster_id"]
             for r in rosters
@@ -3728,7 +3631,11 @@ with tab14:
                 st.rerun()
 
         if selected_roster_label == "(create new)":
-            active_roster_id = _ensure_roster(admin_team_name, side_val, match_id_val) if admin_team_name else None
+            if admin_team_name:
+                existing_roster_id = roster_mgr.fetch_active_roster(admin_team_name, side_val, match_id_val)
+                active_roster_id = existing_roster_id if existing_roster_id else roster_mgr.ensure_roster(admin_team_name, side_val, match_id_val, source="admin")
+            else:
+                active_roster_id = None
         else:
             active_roster_id = roster_options.get(selected_roster_label)
 
@@ -3754,46 +3661,35 @@ with tab14:
                         if not full_name.strip():
                             st.error("Player full name is required.")
                         else:
-                            with db._get_connection() as conn:
-                                cur = conn.cursor()
-                                cur.execute("SELECT player_id FROM players_master WHERE full_name = ? LIMIT 1", (full_name.strip(),))
-                                row = cur.fetchone()
-                                if row:
-                                    player_id = int(row[0])
-                                    cur.execute("UPDATE players_master SET updated_at = CURRENT_TIMESTAMP WHERE player_id = ?", (player_id,))
-                                else:
-                                    cur.execute("INSERT INTO players_master (full_name) VALUES (?)", (full_name.strip(),))
-                                    player_id = int(cur.lastrowid)
-
-                                jn = None if int(jersey_number) == 0 else int(jersey_number)
-                                pos = position.strip() or None
-                                cur.execute(
-                                    """
-                                    INSERT OR IGNORE INTO roster_players
-                                      (roster_id, player_id, profile_id, jersey_number, position, is_starting, metadata)
-                                    VALUES
-                                      (?, ?, NULL, ?, ?, ?, NULL)
-                                    """,
-                                    (active_roster_id, player_id, jn, pos, int(is_starting)),
+                            jn = None if int(jersey_number) == 0 else int(jersey_number)
+                            pos = position.strip() or None
+                            
+                            # Use DynamicRosterManager to add/upsert
+                            roster_players_data = roster_mgr.get_roster_players(active_roster_id)
+                            # Check if jersey number exists
+                            existing = next((p for p in roster_players_data if p['jersey_number'] == jn and jn is not None), None)
+                            
+                            if existing:
+                                roster_mgr.update_roster_player(
+                                    roster_player_id=existing['roster_player_id'],
+                                    full_name=full_name.strip(),
+                                    jersey_number=jn,
+                                    position=pos if pos else existing['position'],
+                                    is_starting=is_starting
                                 )
-                                if cur.rowcount == 0:
-                                    cur.execute(
-                                        """
-                                        UPDATE roster_players
-                                        SET position = COALESCE(?, position),
-                                            is_starting = ?
-                                        WHERE roster_id = ?
-                                          AND player_id IS ?
-                                          AND profile_id IS NULL
-                                          AND jersey_number IS ?
-                                        """,
-                                        (pos, int(is_starting), active_roster_id, player_id, jn),
-                                    )
+                            else:
+                                roster_mgr.add_player_to_roster(
+                                    roster_id=active_roster_id,
+                                    full_name=full_name.strip(),
+                                    jersey_number=jn,
+                                    position=pos,
+                                    is_starting=is_starting
+                                )
 
                             st.success("Roster updated.")
                             st.rerun()
 
-            roster_players = _fetch_roster_players(active_roster_id)
+            roster_players = roster_mgr.get_roster_players(active_roster_id)
             if roster_players:
                 df = pd.DataFrame(roster_players)
             else:
@@ -3825,18 +3721,12 @@ with tab14:
                             elif edit_starting == "no":
                                 starting_val = 0
 
-                            with db._get_connection() as conn:
-                                cur = conn.cursor()
-                                cur.execute(
-                                    """
-                                    UPDATE roster_players
-                                    SET jersey_number = COALESCE(?, jersey_number),
-                                        position = COALESCE(?, position),
-                                        is_starting = COALESCE(?, is_starting)
-                                    WHERE roster_player_id = ? AND roster_id = ?
-                                    """,
-                                    (jersey_val, pos_val, starting_val, int(edit_id), active_roster_id),
-                                )
+                            roster_mgr.quick_update_roster_player(
+                                roster_player_id=int(edit_id),
+                                jersey_number=jersey_val,
+                                position=pos_val,
+                                is_starting=starting_val
+                            )
                             st.success("Saved.")
                             st.rerun()
 

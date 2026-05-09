@@ -449,7 +449,7 @@ class RosterConfig:
     def load_from_db(self, db_manager, team_a_name: str, team_b_name: str,
                      team_a_color: str = None, team_b_color: str = None) -> bool:
         """
-        Load rosters from the database instead of a JSON file.
+        Load rosters from the database using DynamicRosterManager instead of a JSON file.
 
         Args:
             db_manager: DatabaseManager instance
@@ -461,16 +461,23 @@ class RosterConfig:
         Returns:
             True if at least one team had players in the DB
         """
+        from services.dynamic_roster_manager import DynamicRosterManager
+        roster_mgr = DynamicRosterManager(db_manager)
+        
         self.match_name = f"{team_a_name} vs {team_b_name}"
         self.teams = {}
 
         for side, name, color in [("A", team_a_name, team_a_color),
                                    ("B", team_b_name, team_b_color)]:
-            roster = db_manager.get_roster_for_team(name)
+            
+            # Fetch active roster id
+            active_roster_id = roster_mgr.fetch_active_roster(team_name=name, side=side)
             players = {}
-            for p in roster:
-                if p.get("jersey_number") is not None:
-                    players[str(p["jersey_number"])] = p["name"]
+            if active_roster_id:
+                roster_players = roster_mgr.get_roster_players(active_roster_id)
+                for p in roster_players:
+                    if p.get("jersey_number") is not None:
+                        players[str(p["jersey_number"])] = p.get("full_name") or f"Player {p['player_id']}"
 
             team_entry = {"name": name, "players": players}
             if color:

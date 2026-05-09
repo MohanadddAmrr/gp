@@ -1,0 +1,56 @@
+{
+    "match": "Liverpool vs Bournemouth",
+    "teams": {
+        "A": {
+            "name": "Liverpool",
+            "jersey_color": "red",
+            "players": {
+                "1": "Alisson Becker",
+                "3": "Wataru Endo",
+                "4": "Virgil van Dijk",
+                "5": "Ibrahima Konate",
+                "7": "Luis Diaz",
+                "8": "Dominik Szoboszlai",
+                "9": "Darwin Nunez",
+                "10": "Alexis Mac Allister",
+                "11": "Mohamed Salah",
+                "17": "Curtis Jones",
+                "18": "Cody Gakpo",
+                "19": "Harvey Elliott",
+                "20": "Diogo Jota",
+                "21": "Kostas Tsimikas",
+                "26": "Andrew Robertson",
+                "38": "Ryan Gravenberch",
+                "50": "Vitezslav Jaros",
+                "62": "Caoimhin Kelleher",
+                "66": "Trent Alexander-Arnold",
+                "78": "Jarell Quansah"
+            }
+        },
+        "B": {
+            "name": "Bournemouth",
+            "jersey_color": "black",
+            "players": {
+                "1": "Neto",
+                "2": "Ryan Fredericks",
+                "3": "Milos Kerkez",
+                "4": "Lewis Cook",
+                "5": "Lloyd Kelly",
+                "6": "David Brooks",
+                "8": "Joe Rothwell",
+                "9": "Dominic Solanke",
+                "10": "Ryan Christie",
+                "11": "Dango Ouattara",
+                "12": "Tyler Adams",
+                "13": "Emiliano Marcondes",
+                "14": "Alex Scott",
+                "15": "Adam Smith",
+                "16": "Marcus Tavernier",
+                "17": "Luis Sinisterra",
+                "19": "Justin Kluivert",
+                "20": "Philip Billing",
+                "21": "Kieffer Moore"
+            }
+        }
+    }
+}

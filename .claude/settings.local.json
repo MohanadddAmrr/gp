@@ -4,7 +4,22 @@
       "Bash(git init:*)",
       "Bash(git remote add:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python:*)",
+      "Bash(.venv/Scripts/python.exe tests/test_ball_tracker.py)",
+      "Bash(git checkout:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(where:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(dir:*)",
+      "Bash(pip install:*)",
+      "Bash(rm -f _extract_pdf.py _blueprint.txt)",
+      "Bash(ls _*.*)",
+      "Bash(node -e \"console.log\\(require\\('docx'\\).Document ? 'ok' : 'no'\\)\")",
+      "Bash(node _build_split_doc.js)",
+      "Read(//c/Program Files/LibreOffice/program/**)",
+      "Read(//c/Program Files \\(x86\\)/LibreOffice/program/**)"
     ]
   }
 }
