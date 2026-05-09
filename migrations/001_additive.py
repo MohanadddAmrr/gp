@@ -68,7 +68,20 @@ def _ensure_columns(conn: sqlite3.Connection, table: str, columns: Sequence[Colu
     for col_name, col_def in columns:
         if col_name in existing:
             continue
-        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}")
+        # SQLite limitation: ALTER TABLE ... ADD COLUMN only supports constant defaults.
+        # If a non-constant default is present (e.g. CURRENT_TIMESTAMP), add the column
+        # without that default and backfill existing rows.
+        needs_backfill_ts = "DEFAULT CURRENT_TIMESTAMP" in col_def.upper()
+        alter_def = col_def
+        if needs_backfill_ts:
+            alter_def = col_def.replace("DEFAULT CURRENT_TIMESTAMP", "").replace("default current_timestamp", "")
+            alter_def = " ".join(alter_def.split())
+
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {alter_def}")
+        if needs_backfill_ts:
+            cur.execute(
+                f"UPDATE {table} SET {col_name} = CURRENT_TIMESTAMP WHERE {col_name} IS NULL"
+            )
         added += 1
     return added
 
@@ -77,10 +90,10 @@ def migrate_001_additive(conn: sqlite3.Connection) -> MigrationResult:
     # Keep FK behavior consistent for new connections.
     conn.execute("PRAGMA foreign_keys = ON;")
 
-    # 1) Ensure tables/indexes exist (idempotent).
-    conn.executescript(SCHEMA_SQL)
-
-    # 2) Ensure any missing columns exist for older DBs.
+    # 1) Ensure any missing columns exist for older DBs.
+    #    Important: Some DBs may already have tables (e.g. `matches`) with fewer columns,
+    #    while `SCHEMA_SQL` also creates indexes that reference newer columns (e.g. `match_date`).
+    #    We must add missing columns first so index creation does not fail.
     #    Notes:
     #    - SQLite cannot add constraints to existing tables via ALTER TABLE (beyond adding a column).
     #    - We keep defs conservative (nullable where possible) so existing rows remain valid.
@@ -129,6 +142,46 @@ def migrate_001_additive(conn: sqlite3.Connection) -> MigrationResult:
                 ("weight_kg", "INTEGER"),
                 ("created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
                 ("updated_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+            ],
+        ),
+        (
+            "players_master",
+            [
+                ("profile_id", "INTEGER"),
+                ("full_name", "TEXT"),
+                ("preferred_name", "TEXT"),
+                ("date_of_birth", "DATE"),
+                ("nationality", "TEXT"),
+                ("position_default", "TEXT"),
+                ("height_cm", "INTEGER"),
+                ("weight_kg", "INTEGER"),
+                ("external_ids", "TEXT"),
+                ("created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+                ("updated_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+            ],
+        ),
+        (
+            "rosters",
+            [
+                ("match_id", "INTEGER"),
+                ("team_name", "TEXT"),
+                ("side", "TEXT"),
+                ("source", "TEXT"),
+                ("created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+                ("updated_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+            ],
+        ),
+        (
+            "roster_players",
+            [
+                ("roster_id", "INTEGER"),
+                ("player_id", "INTEGER"),
+                ("profile_id", "INTEGER"),
+                ("jersey_number", "INTEGER"),
+                ("position", "TEXT"),
+                ("is_starting", "BOOLEAN DEFAULT 0"),
+                ("metadata", "TEXT"),
+                ("created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
             ],
         ),
         (
@@ -313,6 +366,9 @@ def migrate_001_additive(conn: sqlite3.Connection) -> MigrationResult:
     added_cols = 0
     for table, cols in column_migrations:
         added_cols += _ensure_columns(conn, table, cols)
+
+    # 2) Ensure tables/indexes exist (idempotent).
+    conn.executescript(SCHEMA_SQL)
 
     return MigrationResult(created_or_verified_schema=True, added_columns=added_cols)
 

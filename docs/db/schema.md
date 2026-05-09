@@ -24,12 +24,18 @@ erDiagram
   PLAYER_PROFILES ||--o{ EVENTS : actor_profile
   PLAYER_PROFILES ||--o{ TRACKING_DATA : tracked_profile
   PLAYER_PROFILES ||--o{ PLAYER_STATS : aggregates_profile
+  PLAYER_PROFILES ||--o{ PLAYERS_MASTER : profile_link
 
   PLAYERS ||--o{ EVENTS : actor_instance
   PLAYERS ||--o{ TRACKING_DATA : tracked_instance
   PLAYERS ||--|| PLAYER_STATS : aggregates_instance
   PLAYERS ||--o{ HEATMAPS : scoped_to
   PLAYERS ||--o{ BALL_TRACKING : possession_context
+
+  ROSTERS ||--o{ ROSTER_PLAYERS : contains
+  MATCHES ||--o{ ROSTERS : has
+  PLAYERS_MASTER ||--o{ ROSTER_PLAYERS : member
+  PLAYER_PROFILES ||--o{ ROSTER_PLAYERS : member_profile
 
   MATCHES {
     int match_id PK
@@ -80,6 +86,43 @@ erDiagram
     int weight_kg
     datetime created_at
     datetime updated_at
+  }
+
+  PLAYERS_MASTER {
+    int player_id PK
+    int profile_id FK "nullable"
+    text full_name
+    text preferred_name
+    date date_of_birth
+    text nationality
+    text position_default
+    int height_cm
+    int weight_kg
+    text external_ids_json
+    datetime created_at
+    datetime updated_at
+  }
+
+  ROSTERS {
+    int roster_id PK
+    int match_id FK "nullable"
+    text team_name
+    text side "A|B nullable"
+    text source
+    datetime created_at
+    datetime updated_at
+  }
+
+  ROSTER_PLAYERS {
+    int roster_player_id PK
+    int roster_id FK
+    int player_id FK "nullable"
+    int profile_id FK "nullable"
+    int jersey_number
+    text position
+    bool is_starting
+    text metadata_json
+    datetime created_at
   }
 
   EVENTS {

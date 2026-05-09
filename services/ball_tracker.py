@@ -77,13 +77,10 @@ class BallTracker:
     def _calculate_velocity(self) -> None:
         """
         Calculates current ball velocity from recent positions.
-
-        Algorithm:
-        1. Take last N positions (where N = velocity_window)
-        2. Calculate displacement between consecutive positions
-        3. Calculate time delta between consecutive positions
-        4. Velocity = total_displacement / total_time
+        Caps velocity at MAX_BALL_SPEED to reject false detections.
         """
+        MAX_BALL_SPEED_PPS = 5000.0  # pixels/second sanity cap
+
         if len(self.ball_history) < 2:
             self.current_velocity = 0.0
             return
@@ -111,9 +108,12 @@ class BallTracker:
             total_time += dt
 
         if total_time > 0:
-            self.current_velocity = total_distance / total_time
+            raw_velocity = total_distance / total_time
+            # Cap at physically realistic maximum
+            self.current_velocity = min(raw_velocity, MAX_BALL_SPEED_PPS)
         else:
             self.current_velocity = 0.0
+
 
     def _calculate_direction(self) -> None:
         """

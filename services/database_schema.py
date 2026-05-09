@@ -87,6 +87,56 @@ CREATE TABLE IF NOT EXISTS player_profiles (
 );
 
 -- ============================================================
+-- PLAYER TABLE (master data)
+-- ============================================================
+-- NOTE: The project already has a `players` table for per-match instances.
+-- This table is a master rosterable "player" entity for long-lived identity.
+CREATE TABLE IF NOT EXISTS players_master (
+    player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER, -- Optional link to player_profiles identity
+    full_name TEXT NOT NULL,
+    preferred_name TEXT,
+    date_of_birth DATE,
+    nationality TEXT,
+    position_default TEXT,
+    height_cm INTEGER,
+    weight_kg INTEGER,
+    external_ids TEXT, -- JSON: provider ids (statsbomb/opta/etc.)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (profile_id) REFERENCES player_profiles(profile_id) ON DELETE SET NULL
+);
+
+-- ============================================================
+-- ROSTERS (team squad lists; optionally match-scoped)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS rosters (
+    roster_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id INTEGER,          -- nullable (season roster vs match-day roster)
+    team_name TEXT NOT NULL,
+    side TEXT,                 -- nullable; 'A'/'B' when match-scoped
+    source TEXT,               -- e.g. 'json', 'api', 'manual'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (match_id) REFERENCES matches(match_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS roster_players (
+    roster_player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    roster_id INTEGER NOT NULL,
+    player_id INTEGER,         -- nullable if only profile_id known
+    profile_id INTEGER,        -- nullable if only player_id known
+    jersey_number INTEGER,
+    position TEXT,
+    is_starting BOOLEAN DEFAULT 0,
+    metadata TEXT,             -- JSON
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (roster_id) REFERENCES rosters(roster_id) ON DELETE CASCADE,
+    FOREIGN KEY (player_id) REFERENCES players_master(player_id) ON DELETE SET NULL,
+    FOREIGN KEY (profile_id) REFERENCES player_profiles(profile_id) ON DELETE SET NULL
+);
+
+-- ============================================================
 -- PLAYER STATS TABLE (aggregated statistics per match)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS player_stats (
@@ -293,6 +343,19 @@ CREATE INDEX IF NOT EXISTS idx_ball_tracking_frame ON ball_tracking(frame_number
 CREATE INDEX IF NOT EXISTS idx_stats_match ON player_stats(match_id);
 CREATE INDEX IF NOT EXISTS idx_stats_profile ON player_stats(profile_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_name ON player_profiles(name);
+CREATE INDEX IF NOT EXISTS idx_players_master_name ON players_master(full_name);
+CREATE INDEX IF NOT EXISTS idx_rosters_team ON rosters(team_name);
+CREATE INDEX IF NOT EXISTS idx_rosters_match ON rosters(match_id);
+CREATE INDEX IF NOT EXISTS idx_roster_players_roster ON roster_players(roster_id);
+CREATE INDEX IF NOT EXISTS idx_roster_players_player ON roster_players(player_id);
+CREATE INDEX IF NOT EXISTS idx_roster_players_profile ON roster_players(profile_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_player_identity
+  ON roster_players(
+    roster_id,
+    ifnull(player_id, -1),
+    ifnull(profile_id, -1),
+    ifnull(jersey_number, -1)
+  );
 
 -- ============================================================
 -- XG DATA TABLE (Expected Goals)

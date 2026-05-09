@@ -13,6 +13,7 @@ Provides CRUD operations for all database tables with support for:
 import sqlite3
 import json
 import csv
+import logging
 import pickle
 import numpy as np
 from pathlib import Path
@@ -21,6 +22,8 @@ from datetime import datetime, timedelta
 from contextlib import contextmanager
 
 from services.database_schema import SCHEMA_SQL, EVENT_TYPES
+
+logger = logging.getLogger(__name__)
 
 def convert_numpy_types(obj):
     """Convert numpy types to Python native types for JSON serialization."""
@@ -92,7 +95,7 @@ class DatabaseManager:
             self._migrate_schema(conn)
             # Then run the full schema (CREATE IF NOT EXISTS is safe)
             conn.executescript(SCHEMA_SQL)
-        print(f"✅ Database initialized: {self.db_path}")
+        print(f"Database initialized: {self.db_path}")
 
     def _migrate_schema(self, conn):
         """Handle schema migrations for existing tables."""
@@ -140,7 +143,7 @@ class DatabaseManager:
                 cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
         # Reinitialize
         self.initialize_database()
-        print("✅ Database reset complete")
+        print("[OK] Database reset complete")
     
     # ============================================================
     # MATCH OPERATIONS
@@ -174,7 +177,7 @@ class DatabaseManager:
             """, (video_path, team_a, team_b, duration_seconds, score_a, score_b, 
                   venue, fps, width, height))
             match_id = cursor.lastrowid
-        print(f"✅ Match created: ID={match_id}, {team_a} vs {team_b}")
+        print(f"[OK] Match created: ID={match_id}, {team_a} vs {team_b}")
         return match_id
     
     def get_match(self, match_id: int) -> Optional[Dict]:
@@ -240,7 +243,7 @@ class DatabaseManager:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM matches WHERE match_id = ?", (match_id,))
-        print(f"✅ Match {match_id} deleted")
+        print(f"[OK] Match {match_id} deleted")
     
     # ============================================================
     # TEAM OPERATIONS
@@ -327,7 +330,7 @@ class DatabaseManager:
             """, (name, team_name, jersey_number, face_blob, face_image_path,
                   date_of_birth, nationality, position_default, height_cm, weight_kg))
             profile_id = cursor.lastrowid
-        print(f"✅ Player profile created: {name} (ID={profile_id})")
+        logger.info(f"Player profile created: {name} (ID={profile_id})")
         return profile_id
     
     def get_player_profile(self, profile_id: int) -> Optional[Dict]:
@@ -427,6 +430,64 @@ class DatabaseManager:
                 profiles.append(profile)
             return profiles
     
+    def get_roster_for_team(self, team_name: str) -> List[Dict]:
+        """
+        Get all player profiles for a given team.
+
+        Returns:
+            List of dicts with keys: name, jersey_number, position_default, profile_id
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT profile_id, name, jersey_number, position_default
+                FROM player_profiles
+                WHERE team_name = ?
+                ORDER BY jersey_number
+            """, (team_name,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def seed_rosters_from_json(self, roster_path) -> int:
+        """
+        Import rosters from a JSON file into player_profiles.
+        Skips players that already exist (same name + team_name).
+
+        Args:
+            roster_path: Path to roster JSON (same format used by PlayerIdentityManager)
+
+        Returns:
+            Number of new profiles created
+        """
+        roster_path = Path(roster_path)
+        with open(roster_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        created = 0
+        for side in ['A', 'B']:
+            team_info = data.get('teams', {}).get(side, {})
+            team_name = team_info.get('name', f'Team {side}')
+            players = team_info.get('players', {})
+
+            for jersey_num_str, player_name in players.items():
+                # Check if already exists
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT profile_id FROM player_profiles
+                        WHERE name = ? AND team_name = ?
+                    """, (player_name, team_name))
+                    if cursor.fetchone():
+                        continue
+
+                self.create_player_profile(
+                    name=player_name,
+                    team_name=team_name,
+                    jersey_number=int(jersey_num_str),
+                )
+                created += 1
+
+        return created
+
     # ============================================================
     # PLAYER INSTANCE OPERATIONS (Per-match)
     # ============================================================
@@ -543,6 +604,7 @@ class DatabaseManager:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             for event in events:
+                metadata = event.get('metadata')
                 metadata_json = json.dumps(convert_numpy_types(metadata)) if metadata else None
 
                 cursor.execute("""
@@ -1079,7 +1141,7 @@ class DatabaseManager:
         with open(output_path, 'w') as f:
             json.dump(export_data, f, indent=2, default=str)
         
-        print(f"✅ Match exported to: {output_path}")
+        print(f"[OK] Match exported to: {output_path}")
         return output_path
     
     def export_player_stats_to_csv(
@@ -1116,7 +1178,7 @@ class DatabaseManager:
                 writer.writeheader()
                 writer.writerows(stats)
         
-        print(f"✅ Player stats exported to: {output_path}")
+        print(f"[OK] Player stats exported to: {output_path}")
         return output_path
     
     def export_all_matches_to_csv(self, output_path: str = "all_matches.csv") -> str:
@@ -1129,7 +1191,7 @@ class DatabaseManager:
                 writer.writeheader()
                 writer.writerows(matches)
         
-        print(f"✅ All matches exported to: {output_path}")
+        print(f"[OK] All matches exported to: {output_path}")
         return output_path
     
     # ============================================================
@@ -1279,7 +1341,7 @@ class DatabaseManager:
                     team_id=team_id
                 )
         
-        print(f"✅ Match results saved to database: Match ID={match_id}")
+        print(f"[OK] Match results saved to database: Match ID={match_id}")
         return match_id
     
     # ============================================================

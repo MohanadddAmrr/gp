@@ -49,3 +49,6 @@ demo_outputs/
 
 # Claude
 .claude/
+*.db
+*.onnx
+*.pt
