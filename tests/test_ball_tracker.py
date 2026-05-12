@@ -151,7 +151,7 @@ def test_prediction():
         tracker.update(bbox, i, i/30.0)
 
     current_pos = tracker.get_position()
-    predicted_pos = tracker.predict_position(1.0)  # 1 second ahead
+    predicted_pos = tracker.predict_next_position(1.0)  # 1 second ahead
 
     print(f"[OK] Current position: {current_pos}")
     print(f"[OK] Predicted position (1s ahead): {predicted_pos}")
@@ -192,12 +192,16 @@ def test_reset():
     print("[OK] Reset functionality test PASSED\n")
 
 
-def test_on_video(video_path: str, max_frames: int = 100):
+def run_on_video(video_path: str, max_frames: int = 100):
     """
     Test tracker on actual video using simple ball detection.
 
     Note: This is a simplified test. In production, you'd use YOLO for detection.
     Here we use basic color detection just to verify the tracker works.
+
+    Renamed from ``test_on_video`` so pytest does not collect it (it takes a
+    required positional `video_path` argument and is meant to be invoked from
+    the script-style ``__main__`` block, not from a test session).
     """
     print("=" * 60)
     print("TEST 7: Real Video Test")
@@ -278,7 +282,7 @@ def run_all_tests():
 
         # Test on video if available
         video_path = "input_videos/arsenal.mp4"
-        test_on_video(video_path, max_frames=100)
+        run_on_video(video_path, max_frames=100)
 
         print("=" * 60)
         print("ALL TESTS PASSED [OK]")
