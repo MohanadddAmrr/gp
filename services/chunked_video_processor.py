@@ -47,6 +47,19 @@ from typing import Iterable, Optional
 
 import numpy as np
 
+try:
+    import psutil  # peak-RAM tracking for long-match acceptance (Day 9)
+    _HAS_PSUTIL = True
+except ImportError:  # pragma: no cover
+    _HAS_PSUTIL = False
+
+
+def _peak_ram_mb() -> float:
+    """Process RSS in MB, or 0 when psutil isn't available."""
+    if not _HAS_PSUTIL:
+        return 0.0
+    return psutil.Process().memory_info().rss / (1024 * 1024)
+
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +372,9 @@ def process_video_in_chunks(
     track_dedup = TrackDeduplicator(merge_distance_px=80.0, max_lost_frames=30)
 
     chunk_summaries: list[dict] = []
+    # Day 9: peak RAM tracking — sampled after each chunk write.
+    peak_ram_mb = _peak_ram_mb()
+
     t0 = time.perf_counter()
     for idx, (s, e) in enumerate(chunks):
         if idx < start_chunk_idx:
@@ -378,11 +394,17 @@ def process_video_in_chunks(
         state.chunks_completed = idx + 1
         _write_checkpoint(output_dir, idx, state)
         chunk_summaries.append(summary)
+
+        # Sample RAM after each chunk; carry the peak.
+        chunk_ram = _peak_ram_mb()
+        summary["ram_mb"] = round(chunk_ram, 1)
+        peak_ram_mb = max(peak_ram_mb, chunk_ram)
+
         logger.info(
-            "chunk %d/%d done frames=%d-%d  person=%d ball=%d canonical=%d",
+            "chunk %d/%d done frames=%d-%d  person=%d ball=%d canonical=%d ram=%.0fMB",
             idx + 1, len(chunks), s, e,
             summary["person_detections"], summary["ball_detections"],
-            summary["canonical_ids_in_chunk"],
+            summary["canonical_ids_in_chunk"], chunk_ram,
         )
 
     elapsed = time.perf_counter() - t0
@@ -418,6 +440,7 @@ def process_video_in_chunks(
             "chunk_seconds": chunk_seconds,
             "summaries": chunk_summaries,
             "wall_clock_seconds": round(elapsed, 1),
+            "peak_ram_mb": round(peak_ram_mb, 1),
         },
         "tracker": getattr(tracker, "name", algorithm),
         "reid_enabled": reid_layer is not None,
