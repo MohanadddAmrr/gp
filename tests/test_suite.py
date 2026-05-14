@@ -125,98 +125,14 @@ def generate_mock_match_data() -> Dict[str, Any]:
 # UNIT TESTS - CORE SERVICES
 # =============================================================================
 
-class TestBallTracker(unittest.TestCase):
-    """Test cases for BallTracker service."""
-    
-    @classmethod
-    def setUpClass(cls):
-        """Set up test fixtures."""
-        if not HAS_CV2:
-            cls.skipTest(cls, "OpenCV not available")
-        
-        try:
-            from services.ball_tracker import BallTracker
-            cls.BallTracker = BallTracker
-        except ImportError as e:
-            cls.skipTest(cls, f"BallTracker not available: {e}")
-    
-    def setUp(self):
-        """Set up test instance."""
-        self.tracker = self.BallTracker()
-    
-    def test_initialization(self):
-        """Test tracker initialization."""
-        self.assertIsNotNone(self.tracker)
-        self.assertEqual(len(self.tracker.history), 0)
-    
-    def test_update_position(self):
-        """Test position update."""
-        position = (100, 200)
-        confidence = 0.9
-        
-        self.tracker.update(position, confidence)
-        
-        self.assertEqual(len(self.tracker.history), 1)
-        self.assertEqual(self.tracker.get_smoothed_position(), position)
-    
-    def test_velocity_calculation(self):
-        """Test velocity calculation."""
-        # Add positions over time
-        for i in range(10):
-            self.tracker.update((100 + i*10, 200), 0.9)
-        
-        velocity = self.tracker.get_velocity()
-        self.assertIsNotNone(velocity)
-        self.assertGreater(velocity, 0)
-    
-    def test_prediction(self):
-        """Test position prediction."""
-        # Add some historical positions
-        for i in range(5):
-            self.tracker.update((100 + i*5, 200), 0.9)
-        
-        predicted = self.tracker.predict_position(1.0)
-        self.assertIsNotNone(predicted)
-        self.assertEqual(len(predicted), 2)
+# BallTracker is covered comprehensively by tests/test_ball_tracker.py
+# (basic functionality, velocity smoothing, stationary ball, direction,
+# prediction, reset). No duplicate suite is kept here.
 
 
-class TestPossessionTracker(unittest.TestCase):
-    """Test cases for PossessionTracker service."""
-    
-    @classmethod
-    def setUpClass(cls):
-        """Set up test fixtures."""
-        try:
-            from services.possession_tracker import PossessionTracker
-            cls.PossessionTracker = PossessionTracker
-        except ImportError as e:
-            cls.skipTest(cls, f"PossessionTracker not available: {e}")
-    
-    def setUp(self):
-        """Set up test instance."""
-        self.tracker = self.PossessionTracker()
-    
-    def test_initialization(self):
-        """Test tracker initialization."""
-        self.assertIsNotNone(self.tracker)
-        stats = self.tracker.get_stats()
-        self.assertIn('team_possession', stats)
-    
-    def test_possession_update(self):
-        """Test possession update."""
-        # Simulate ball near team A player
-        ball_pos = (100, 200)
-        player_positions = {0: (105, 205), 5: (300, 400)}  # Player 0 is closer
-        
-        self.tracker.update(ball_pos, player_positions, 'A', 1.0)
-        
-        stats = self.tracker.get_stats()
-        self.assertIsNotNone(stats)
-    
-    def test_zone_possession(self):
-        """Test zone-based possession."""
-        stats = self.tracker.get_zone_possession()
-        self.assertIsInstance(stats, dict)
+# PossessionTracker is covered by tests/test_possession.py and
+# tests/test_possession_validation.py (detection, history, statistics,
+# zone/pressure/duration stats). No duplicate suite is kept here.
 
 
 class TestEventDetector(unittest.TestCase):
@@ -240,13 +156,18 @@ class TestEventDetector(unittest.TestCase):
         self.assertIsNotNone(self.detector)
     
     def test_shot_detection(self):
-        """Test shot event detection."""
-        # Simulate shot conditions
-        ball_velocity = 25.0  # m/s
-        ball_position = (1800, 340)  # Near goal
-        
-        is_shot = self.detector.detect_shot(ball_velocity, ball_position)
-        self.assertIsInstance(is_shot, bool)
+        """Test shot event detection returns a shot dict or None."""
+        result = self.detector.detect_shot(
+            ball_position=(1800, 340),
+            ball_direction=(1.0, 0.0),
+            ball_velocity_mps=25.0,
+            frame_idx=100,
+            timestamp=4.0,
+            frame_width=1920,
+            frame_height=1080,
+        )
+        # detect_shot returns a shot-event dict when detected, else None
+        self.assertTrue(result is None or isinstance(result, dict))
 
 
 class TestDatabaseManager(unittest.TestCase):
@@ -264,6 +185,7 @@ class TestDatabaseManager(unittest.TestCase):
     def setUp(self):
         """Set up test instance with temporary database."""
         self.temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self.temp_db.close()  # release the OS handle; Windows blocks unlink while open
         self.db = self.DatabaseManager(self.temp_db.name)
         self.db.initialize_database()
     
@@ -322,9 +244,8 @@ class TestxGCalculator(unittest.TestCase):
     def setUpClass(cls):
         """Set up test fixtures."""
         try:
-            from services.xg_calculator import xGCalculator, ShotEvent, ShotType
+            from services.xg_calculator import xGCalculator, ShotType
             cls.xGCalculator = xGCalculator
-            cls.ShotEvent = ShotEvent
             cls.ShotType = ShotType
         except ImportError as e:
             cls.skipTest(cls, f"xGCalculator not available: {e}")
@@ -338,40 +259,32 @@ class TestxGCalculator(unittest.TestCase):
         self.assertIsNotNone(self.calculator)
     
     def test_xg_calculation(self):
-        """Test xG calculation."""
-        shot = self.ShotEvent(
-            timestamp=120.5,
-            frame=3012,
-            shooter_id=10,
-            shooter_team="A",
+        """Test xG calculation returns a probability in [0, 1]."""
+        xg = self.calculator.calculate_xg(
             x=0.85,  # Near goal
             y=0.5,
-            shot_type=self.ShotType.OPEN_PLAY
+            shot_type=self.ShotType.OPEN_PLAY,
         )
-        
-        xg = self.calculator.calculate_xg(shot)
-        
+
         self.assertIsInstance(xg, float)
         self.assertGreaterEqual(xg, 0.0)
         self.assertLessEqual(xg, 1.0)
-    
+
     def test_stats_accumulation(self):
-        """Test statistics accumulation."""
-        # Add multiple shots
+        """Test statistics accumulation over multiple shots."""
         for i in range(5):
-            shot = self.ShotEvent(
+            self.calculator.add_shot(
                 timestamp=float(i * 60),
                 frame=i * 1500,
                 shooter_id=i,
                 shooter_team="A",
                 x=0.8,
                 y=0.5,
-                shot_type=self.ShotType.OPEN_PLAY
+                shot_type=self.ShotType.OPEN_PLAY,
             )
-            self.calculator.add_shot(shot)
-        
-        stats = self.calculator.get_stats()
-        self.assertEqual(stats.total_shots, 5)
+
+        stats = self.calculator.get_statistics()
+        self.assertEqual(stats['total_shots'], 5)
 
 
 class TestTacticalAnalyzer(unittest.TestCase):
@@ -387,19 +300,37 @@ class TestTacticalAnalyzer(unittest.TestCase):
             cls.skipTest(cls, f"TacticalAnalyzer not available: {e}")
     
     def setUp(self):
-        """Set up test instance."""
-        self.analyzer = self.TacticalAnalyzer()
-    
+        """Set up test instance with only formation detection enabled."""
+        self.analyzer = self.TacticalAnalyzer(
+            enable_offside=False,
+            enable_set_pieces=False,
+            enable_dribbles=False,
+            enable_pitch_transform=False,
+        )
+
     def test_initialization(self):
         """Test analyzer initialization."""
         self.assertIsNotNone(self.analyzer)
-    
+
     def test_formation_detection(self):
-        """Test formation detection."""
-        positions = generate_mock_player_positions(11)
-        
-        formation = self.analyzer.detect_formation(positions)
-        self.assertIsInstance(formation, str)
+        """Test formation detection via the update loop."""
+        positions = generate_mock_player_positions(22)
+        # Formation detection runs inside update() every 30 frames
+        for frame_idx in range(60):
+            self.analyzer.update(
+                player_positions=positions,
+                ball_position=(960, 540),
+                ball_velocity=0.0,
+                current_possessor=0,
+                current_team="A",
+                frame_idx=frame_idx,
+                timestamp=frame_idx / 30.0,
+            )
+
+        formations = self.analyzer.get_current_formations()
+        self.assertIsInstance(formations, dict)
+        self.assertIn("A", formations)
+        self.assertIn("B", formations)
 
 
 class TestHighlightsGenerator(unittest.TestCase):
@@ -409,36 +340,47 @@ class TestHighlightsGenerator(unittest.TestCase):
     def setUpClass(cls):
         """Set up test fixtures."""
         try:
-            from services.highlights_generator import HighlightsGenerator
+            from services.highlights_generator import (
+                HighlightsGenerator, EventType, ImportanceLevel,
+            )
             cls.HighlightsGenerator = HighlightsGenerator
+            cls.EventType = EventType
+            cls.ImportanceLevel = ImportanceLevel
         except ImportError as e:
             cls.skipTest(cls, f"HighlightsGenerator not available: {e}")
-    
+
     def setUp(self):
         """Set up test instance."""
         self.generator = self.HighlightsGenerator()
-    
+
     def test_initialization(self):
         """Test generator initialization."""
         self.assertIsNotNone(self.generator)
-    
+
     def test_add_event(self):
-        """Test adding highlight event."""
-        self.generator.add_event(
+        """Test adding a highlight event."""
+        event = self.generator.add_event(
+            event_type=self.EventType.GOAL,
             timestamp=120.5,
-            event_type="goal",
-            importance="CRITICAL",
-            description="Amazing goal!"
+            frame=3012,
+            team="A",
+            description="Amazing goal!",
         )
-        
-        events = self.generator.get_events()
-        self.assertEqual(len(events), 1)
-    
+
+        self.assertEqual(len(self.generator.events), 1)
+        self.assertEqual(event.event_type, self.EventType.GOAL)
+
     def test_importance_scoring(self):
-        """Test importance score calculation."""
-        score = self.generator.calculate_importance("goal", {"distance": 25})
-        self.assertIsInstance(score, float)
-        self.assertGreater(score, 0)
+        """Test that more significant events get higher importance."""
+        goal = self.generator.add_event(
+            event_type=self.EventType.GOAL, timestamp=10.0, frame=250,
+        )
+        pass_event = self.generator.add_event(
+            event_type=self.EventType.PASS_COMPLETION, timestamp=20.0, frame=500,
+        )
+
+        self.assertIsInstance(goal.importance, self.ImportanceLevel)
+        self.assertGreater(goal.importance.value, pass_event.importance.value)
 
 
 # =============================================================================
@@ -467,6 +409,7 @@ class TestIntegration(unittest.TestCase):
             
             # Create temporary database
             temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+            temp_db.close()  # release the OS handle; Windows blocks unlink while open
             db = DatabaseManager(temp_db.name)
             db.initialize_database()
             
@@ -514,7 +457,8 @@ class TestPerformance(unittest.TestCase):
             start_time = time.time()
             
             for i in range(1000):
-                tracker.update((100 + i, 200), 0.9)
+                bbox = (100 + i, 200, 110 + i, 210)
+                tracker.update(bbox, i, i / 30.0)
             
             elapsed = time.time() - start_time
             
@@ -528,8 +472,9 @@ class TestPerformance(unittest.TestCase):
         """Benchmark database query performance."""
         try:
             from services.database_manager import DatabaseManager
-            
+
             temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+            temp_db.close()  # release the OS handle; Windows blocks unlink while open
             db = DatabaseManager(temp_db.name)
             db.initialize_database()
             
@@ -568,9 +513,8 @@ def run_tests():
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     
-    # Add all test classes
-    suite.addTests(loader.loadTestsFromTestCase(TestBallTracker))
-    suite.addTests(loader.loadTestsFromTestCase(TestPossessionTracker))
+    # Add all test classes (BallTracker / PossessionTracker live in their
+    # own dedicated test files; see comments near the top of this module)
     suite.addTests(loader.loadTestsFromTestCase(TestEventDetector))
     suite.addTests(loader.loadTestsFromTestCase(TestDatabaseManager))
     suite.addTests(loader.loadTestsFromTestCase(TestxGCalculator))
