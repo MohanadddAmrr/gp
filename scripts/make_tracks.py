@@ -72,13 +72,18 @@ def generate_tracks(
     reid_layer = JerseyPosReID() if reid else None
 
     frames_out: list[dict] = []
-    for frame_idx in range(start_frame, last_frame, stride):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    frame_idx = start_frame
+    while frame_idx < last_frame:
         ok, frame = cap.read()
         if not ok or frame is None:
             break
         frame = cv2.resize(frame, (target_w, target_h))
 
+        # The tracker and Re-ID layer must see EVERY frame: BoT-SORT / ByteTrack
+        # only assign a track id once a detection is confirmed over consecutive
+        # frames, so a strided sequence collapses the id'd detections to ~zero.
+        # We run the full pipeline on every frame and only *emit* on `stride`.
         res_list = tracker.track(
             source=frame, classes=[0, 32], conf=0.3, imgsz=640,
             verbose=False, persist=True,
@@ -127,7 +132,9 @@ def generate_tracks(
                             "bbox": bbox,
                             "conf": round(float(conf), 4),
                         })
-        frames_out.append({"frame_idx": frame_idx, "objects": objects})
+        if (frame_idx - start_frame) % stride == 0:
+            frames_out.append({"frame_idx": frame_idx, "objects": objects})
+        frame_idx += 1
 
     cap.release()
 
@@ -166,7 +173,8 @@ def _cli(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument(
         "--stride", type=int, default=25,
-        help="Process every Nth frame (default: 25 ~ 1 fps at 25 fps).",
+        help="Emit every Nth frame (the pipeline still runs on every frame to "
+             "keep tracking healthy; default: 25).",
     )
     parser.add_argument(
         "--algorithm", choices=("bytetrack", "botsort"), default="botsort",
