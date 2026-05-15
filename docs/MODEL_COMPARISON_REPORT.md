@@ -20,7 +20,7 @@ python -m services.multi_model_evaluator \
   - YOLOv8n / 8s / 8m — Ultralytics CNN-based, anchor-based heads
   - YOLO11n — next-gen YOLO architecture, anchor-free
   - RT-DETR-L — Detection Transformer, attention-based
-- **3 matches**: `test (2).mp4`, `epl_newcastle_vs_utd_2026.mp4`,
+- **3 matches**: `test (2).mp4`, `newcastlevsmanchesterunited.mp4`,
   `liverpoolvstottenham.mp4` (a mix of broadcast and tactical-camera angles).
 - **Same 300 frames per video**, sampled evenly via `_evenly_sampled_indices`
   so every model sees identical input.
@@ -65,7 +65,7 @@ python -m services.multi_model_evaluator \
    FPS**, yolov8n close behind at 6.88, yolov8s at 3.67 (~half), yolov8m
    at 2.82, rtdetr-l trails at 1.24 (~6× slower than yolo11n).
    *Caveat:* per-video FPS varies dramatically with frame count and codec
-   — yolo11n hit 10.4 FPS on `epl_newcastle_vs_utd_2026.mp4` but only
+   — yolo11n hit 10.4 FPS on `newcastlevsmanchesterunited.mp4` but only
    2.7 FPS on the lower-resolution `test (2).mp4`. The relative ordering
    is what matters for the model choice.
 
@@ -158,7 +158,7 @@ becomes acceptable.
   ```
   python -m services.multi_model_evaluator \
     --videos "input_videos/test (2).mp4" \
-             "input_videos/epl_newcastle_vs_utd_2026.mp4" \
+             "input_videos/newcastlevsmanchesterunited.mp4" \
              "input_videos/liverpoolvstottenham.mp4" \
     --frames 300
   ```
