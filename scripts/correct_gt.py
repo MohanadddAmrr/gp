@@ -180,24 +180,31 @@ class _Editor:
 
     def _load_frame_images(self, video_path: Path) -> dict[int, "object"]:
         """Decode the video once, sequentially, caching the frames the GT
-        references. Sequential decode avoids the per-seek H.264 degradation."""
+        references. Sequential decode avoids the per-seek H.264 degradation.
+
+        We use `grab()` (no numpy copy) for the ~95% of frames we don't keep
+        and only `retrieve()` for the wanted ones — fully reading every frame
+        into Python keeps thousands of 1280x720x3 buffers alive long enough
+        to OOM ffmpeg's internal frame pool on this video.
+        """
         cv2 = self.cv2
         wanted = sorted(f["frame_idx"] for f in self.frames)
+        wanted_set = set(wanted)
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
             raise RuntimeError(f"Failed to open video: {video_path}")
         images: dict[int, object] = {}
         cap.set(cv2.CAP_PROP_POS_FRAMES, wanted[0])
-        idx = wanted[0]
-        wanted_set = set(wanted)
         last = wanted[-1]
-        while idx <= last:
-            ok, frame = cap.read()
-            if not ok or frame is None:
-                break
+        for idx in range(wanted[0], last + 1):
             if idx in wanted_set:
+                ok, frame = cap.read()
+                if not ok or frame is None:
+                    break
                 images[idx] = frame
-            idx += 1
+            else:
+                if not cap.grab():
+                    break
         cap.release()
         if not images:
             raise RuntimeError("decoded no frames the GT references")
