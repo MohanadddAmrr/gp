@@ -1,0 +1,36 @@
+{
+  "api_data": {
+    "match_id": "538030",
+    "competition": "Premier League",
+    "season": "2025",
+    "match_date": "2026-02-08T16:30:00+00:00",
+    "home_team": "Liverpool FC",
+    "away_team": "Manchester City FC",
+    "home_score": 1,
+    "away_score": 2,
+    "source": "Football-data.org"
+  },
+  "video_data": {},
+  "enriched": {
+    "home_team": "Liverpool FC",
+    "away_team": "Manchester City FC",
+    "competition": "Premier League",
+    "season": "2025",
+    "match_date": "2026-02-08T16:30:00+00:00",
+    "home_score": 1,
+    "away_score": 2,
+    "api_match_id": "538030",
+    "api_source": "Football-data.org",
+    "total_frames": null,
+    "possession_home": null,
+    "possession_away": null,
+    "shots_home": null,
+    "shots_away": null,
+    "xg_home": null,
+    "xg_away": null,
+    "tracking_mota": null,
+    "tracking_idf1": null,
+    "id_switches": null
+  },
+  "enriched_at": "2026-05-17T14:35:18.393341"
+}

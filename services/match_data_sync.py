@@ -139,13 +139,12 @@ class MatchDataSync:
 
             # Try to persist — tolerate failures
             try:
-                self.db.save_match_result(
-                    home_team=m.home_team,
-                    away_team=m.away_team,
-                    home_score=m.home_score or 0,
-                    away_score=m.away_score or 0,
-                    match_date=m.match_date.isoformat() if m.match_date else "",
-                    competition=m.competition,
+                self.db.create_match(
+                    video_path=f"api://{m.source}/{m.match_id}",
+                    team_a=m.home_team,
+                    team_b=m.away_team,
+                    score_a=m.home_score or 0,
+                    score_b=m.away_score or 0,
                 )
                 saved += 1
             except Exception as exc:

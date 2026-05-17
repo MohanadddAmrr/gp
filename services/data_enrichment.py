@@ -215,20 +215,29 @@ class DataEnrichment:
         return enriched
 
     def _save_enriched(self, enriched: Dict[str, Any]):
-        """Attempt to update the DB with the enriched data (best-effort)."""
+        """
+        Persist enriched match record to the database (best-effort).
+
+        Uses create_match() — the correct DatabaseManager method.
+        If the record already exists or the write fails, we log and continue.
+        """
         try:
-            if hasattr(self.db, "save_match_result"):
-                home = enriched.get("home_team", "")
-                away = enriched.get("away_team", "")
-                if home and away:
-                    self.db.save_match_result(
-                        home_team=home,
-                        away_team=away,
-                        home_score=enriched.get("home_score") or 0,
-                        away_score=enriched.get("away_score") or 0,
-                        match_date=enriched.get("match_date", ""),
-                        competition=enriched.get("competition", ""),
-                    )
+            home = enriched.get("home_team", "")
+            away = enriched.get("away_team", "")
+            if not home or not away:
+                return
+            if hasattr(self.db, "create_match"):
+                match_id = self.db.create_match(
+                    video_path=f"enriched://{enriched.get('api_match_id', 'unknown')}",
+                    team_a=home,
+                    team_b=away,
+                    score_a=enriched.get("home_score") or 0,
+                    score_b=enriched.get("away_score") or 0,
+                )
+                logger.info(
+                    "Saved enriched match to DB: ID=%s (%s vs %s)",
+                    match_id, home, away,
+                )
         except Exception as exc:
             logger.debug("Could not persist enriched record: %s", exc)
 
