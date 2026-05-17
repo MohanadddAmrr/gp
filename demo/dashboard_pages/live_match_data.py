@@ -14,6 +14,15 @@ import os
 import streamlit as st
 from datetime import datetime
 from typing import List, Dict
+from pathlib import Path
+
+# Auto-load .env file so API key is always available
+try:
+    from dotenv import load_dotenv
+    _env = Path(__file__).parent.parent.parent / ".env"
+    load_dotenv(_env)
+except Exception:
+    pass
 
 # ---------------------------------------------------------------------------
 # Lazy imports — only load heavy services when the tab is actually rendered
