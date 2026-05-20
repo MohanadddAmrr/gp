@@ -110,6 +110,7 @@ class _ChunkState:
     ball_history_tail: list[list[float]] = field(default_factory=list)
     person_detections_total: int = 0
     ball_detections_total: int = 0
+    ball_second_pass_total: int = 0  # P15 RT-DETR recoveries on YOLO misses
     chunks_completed: int = 0
     # Heat arrays live in numpy, persisted via savez_compressed (NOT in JSON):
     heat_global: Optional[np.ndarray] = None  # (H, W) float32
@@ -121,6 +122,7 @@ class _ChunkState:
             "ball_history_tail": self.ball_history_tail,
             "person_detections_total": int(self.person_detections_total),
             "ball_detections_total": int(self.ball_detections_total),
+            "ball_second_pass_total": int(self.ball_second_pass_total),
             "chunks_completed": int(self.chunks_completed),
         }
 
@@ -132,6 +134,7 @@ class _ChunkState:
         s.ball_history_tail = list(payload.get("ball_history_tail", []))
         s.person_detections_total = int(payload.get("person_detections_total", 0))
         s.ball_detections_total = int(payload.get("ball_detections_total", 0))
+        s.ball_second_pass_total = int(payload.get("ball_second_pass_total", 0))
         s.chunks_completed = int(payload.get("chunks_completed", 0))
         return s
 
@@ -187,6 +190,21 @@ def _highest_completed_chunk(output_dir: Path) -> int:
 # --- Per-chunk processing -------------------------------------------------
 
 
+def _classify_team(reid_classifier, crop, cx: float, frame_w: int) -> str:
+    """Resolve a player's team label ('A'/'B').
+
+    Uses the jersey-colour classifier when a crop is available, falling back
+    to a left/right-half heuristic (the same fallback run_demo.py uses).
+    """
+    if reid_classifier is not None and crop is not None and crop.size:
+        jc = reid_classifier.classify(crop)
+        if jc == "team_a":
+            return "A"
+        if jc == "team_b":
+            return "B"
+    return "A" if cx < frame_w / 2 else "B"
+
+
 def _process_chunk(
     cap,
     start_frame: int,
@@ -200,9 +218,21 @@ def _process_chunk(
     track_dedup,
     target_size: tuple[int, int],
     frame_size: tuple[int, int],
+    fps: float,
+    analytics_runner=None,
+    ball_second_pass=None,
 ) -> dict:
     """Run inference + Re-ID + dedup over [start_frame, end_frame). Updates
     `state` in-place and returns a per-chunk summary dict.
+
+    When `analytics_runner` is given, per-frame player/ball detections are also
+    fed through the full analytics suite (possession, passes, shots, xG,
+    sprints, highlights) so a long match yields the same analytics as
+    run_demo.py.
+
+    When `ball_second_pass` is given (P15), an RT-DETR ball detector is run on
+    frames where the primary tracker missed the ball, before the detections
+    reach the analytics runner.
     """
     import cv2
 
@@ -214,14 +244,23 @@ def _process_chunk(
 
     chunk_person_dets = 0
     chunk_ball_dets = 0
+    chunk_ball_second_pass = 0
     chunk_canonical_ids: set[int] = set()
     frame_idx = start_frame
+    # Seed the second-pass crop window from the carried ball-history tail.
+    last_known_ball_pos: Optional[tuple[float, float]] = (
+        tuple(state.ball_history_tail[-1]) if state.ball_history_tail else None
+    )
 
     while frame_idx < end_frame:
         ok, frame = cap.read()
         if not ok or frame is None:
             break
         frame = cv2.resize(frame, (target_w, target_h))
+
+        # Per-frame detections assembled for the analytics runner.
+        frame_players: dict[int, tuple[float, float, str]] = {}
+        frame_ball_box: Optional[tuple[float, float, float, float]] = None
 
         res_list = tracker.track(
             source=frame, classes=[0, 32], conf=0.3, imgsz=640,
@@ -241,10 +280,14 @@ def _process_chunk(
                     if cls_id == 0:  # person
                         chunk_person_dets += 1
                         eff_tid = int(tid)
-                        if reid_layer is not None and reid_classifier is not None:
+                        # A crop is needed for Re-ID and/or team classification.
+                        crop = None
+                        if (reid_layer is not None and reid_classifier is not None) \
+                                or analytics_runner is not None:
                             x1i, y1i = max(int(x1), 0), max(int(y1), 0)
                             x2i, y2i = max(int(x2), x1i + 1), max(int(y2), y1i + 1)
                             crop = frame[y1i:y2i, x1i:x2i]
+                        if reid_layer is not None and reid_classifier is not None:
                             eff_tid = reid_layer.resolve(
                                 raw_track_id=int(tid),
                                 position=(cx, cy),
@@ -259,22 +302,53 @@ def _process_chunk(
                         ix, iy = int(cx), int(cy)
                         if 0 <= ix < target_w and 0 <= iy < target_h:
                             state.heat_global[iy, ix] += 1
+
+                        if analytics_runner is not None:
+                            team = _classify_team(reid_classifier, crop, cx, target_w)
+                            frame_players[pid] = (cx, cy, team)
                     elif cls_id == 32:  # ball
                         chunk_ball_dets += 1
                         state.ball_history_tail.append([float(cx), float(cy)])
                         # Keep tail bounded so we don't blow JSON size between chunks
                         if len(state.ball_history_tail) > 30:
                             state.ball_history_tail = state.ball_history_tail[-30:]
+                        frame_ball_box = (float(x1), float(y1), float(x2), float(y2))
                 track_dedup.end_frame(frame_idx)
+
+        # P15 — RT-DETR ball-only second pass on frames the primary tracker
+        # missed, before detections reach the analytics runner.
+        if frame_ball_box is None and ball_second_pass is not None:
+            second_box = ball_second_pass.detect_best(frame, last_known_ball_pos)
+            if second_box is not None:
+                frame_ball_box = second_box
+                chunk_ball_second_pass += 1
+                bcx = (second_box[0] + second_box[2]) / 2.0
+                bcy = (second_box[1] + second_box[3]) / 2.0
+                state.ball_history_tail.append([bcx, bcy])
+                if len(state.ball_history_tail) > 30:
+                    state.ball_history_tail = state.ball_history_tail[-30:]
+
+        if frame_ball_box is not None:
+            last_known_ball_pos = (
+                (frame_ball_box[0] + frame_ball_box[2]) / 2.0,
+                (frame_ball_box[1] + frame_ball_box[3]) / 2.0,
+            )
+
+        if analytics_runner is not None:
+            analytics_runner.process_frame(
+                frame_idx, frame_idx / fps, frame_players, frame_ball_box
+            )
         frame_idx += 1
 
     state.person_detections_total += chunk_person_dets
     state.ball_detections_total += chunk_ball_dets
+    state.ball_second_pass_total += chunk_ball_second_pass
 
     return {
         "frames_processed": frame_idx - start_frame,
         "person_detections": chunk_person_dets,
         "ball_detections": chunk_ball_dets,
+        "ball_second_pass_detections": chunk_ball_second_pass,
         "canonical_ids_in_chunk": len(chunk_canonical_ids),
     }
 
@@ -288,12 +362,25 @@ def process_video_in_chunks(
     chunk_seconds: float = 600.0,
     config: Optional[dict] = None,
     resume: bool = True,
+    enable_analytics: bool = True,
+    enable_ball_second_pass: bool = False,
 ) -> dict:
     """Process a video in chunks with persistent checkpoints.
 
     Final output:
         <output_dir>/metrics.json            (run_demo-compatible top-level shape)
         <output_dir>/checkpoints/chunk_NNNN.json + chunk_NNNN_heat.npz
+
+    When `enable_analytics` is True (default), the full analytics suite
+    (possession, passes, shots, xG, sprints, highlights) runs across all
+    chunks and is merged into metrics.json under "analytics". Analytics
+    accumulate in-process and are not checkpoint-restored: a crash-resume
+    that skips chunks yields analytics covering only the resumed chunks,
+    flagged via "analytics".["coverage"].
+
+    When `enable_ball_second_pass` is True (P15), an RT-DETR ball detector
+    recovers the ball on frames the primary tracker missed. Off by default:
+    on CPU it is markedly slower, so it is opt-in for the long-match path.
 
     Returns the merged metrics dict.
     """
@@ -371,6 +458,29 @@ def process_video_in_chunks(
 
     track_dedup = TrackDeduplicator(merge_distance_px=80.0, max_lost_frames=30)
 
+    # P11 — full analytics suite (possession/passes/shots/xG/sprints/highlights).
+    analytics_runner = None
+    if enable_analytics:
+        from services.match_analytics_runner import MatchAnalyticsRunner
+
+        analytics_runner = MatchAnalyticsRunner(
+            frame_width=target_size[0],
+            frame_height=target_size[1],
+            fps=fps,
+        )
+
+    # P15 — RT-DETR ball-only second pass (opt-in; slower on CPU).
+    ball_second_pass = None
+    if enable_ball_second_pass:
+        from services.rtdetr_ball_detector import RTDetrBallDetector
+
+        sp_cfg = (cfg.get("ball_tracking") or {}).get("second_pass") or {}
+        ball_second_pass = RTDetrBallDetector(
+            conf=float(sp_cfg.get("confidence_threshold", 0.25)),
+            crop_size=int(sp_cfg.get("crop_size", 640)),
+        )
+        logger.info("ball second pass: enabled (RT-DETR)")
+
     chunk_summaries: list[dict] = []
     # Day 9: peak RAM tracking — sampled after each chunk write.
     peak_ram_mb = _peak_ram_mb()
@@ -387,6 +497,8 @@ def process_video_in_chunks(
             reid_layer=reid_layer, reid_classifier=reid_classifier,
             track_dedup=track_dedup,
             target_size=target_size, frame_size=frame_size,
+            fps=fps, analytics_runner=analytics_runner,
+            ball_second_pass=ball_second_pass,
         )
         summary["chunk"] = idx
         summary["start_frame"] = s
@@ -431,6 +543,7 @@ def process_video_in_chunks(
             "detection_rate": (
                 state.ball_detections_total / total_frames if total_frames else 0.0
             ),
+            "second_pass_recoveries": int(state.ball_second_pass_total),
             "position_history": state.ball_history_tail,
         },
         "video": video_path.name,
@@ -447,6 +560,17 @@ def process_video_in_chunks(
     }
     if reid_layer is not None:
         metrics["reid_stats"] = reid_layer.stats()
+
+    # P11 — merge the full analytics suite computed across all chunks.
+    if analytics_runner is not None:
+        analytics = analytics_runner.finalize(total_frames)
+        analytics["coverage"] = (
+            "full"
+            if start_chunk_idx == 0
+            else f"partial (resumed from chunk {start_chunk_idx}; "
+            f"earlier chunks not re-analyzed)"
+        )
+        metrics["analytics"] = analytics
 
     (output_dir / "metrics.json").write_text(
         json.dumps(metrics, indent=2), encoding="utf-8"
@@ -491,6 +615,16 @@ def _cli(argv: Optional[list[str]] = None) -> int:
         default="weights/yolov8n.pt",
         help="YOLO weights path.",
     )
+    parser.add_argument(
+        "--no-analytics",
+        action="store_true",
+        help="Skip the full analytics suite (tracking only).",
+    )
+    parser.add_argument(
+        "--ball-second-pass",
+        action="store_true",
+        help="Enable the RT-DETR ball-only second pass (P15; slower on CPU).",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -510,6 +644,8 @@ def _cli(argv: Optional[list[str]] = None) -> int:
         chunk_seconds=args.chunk_seconds,
         config=cfg,
         resume=not args.no_resume,
+        enable_analytics=not args.no_analytics,
+        enable_ball_second_pass=args.ball_second_pass,
     )
     print(
         f"chunks={metrics['chunks']['count']} "
