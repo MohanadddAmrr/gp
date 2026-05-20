@@ -228,11 +228,53 @@ def render():
 
     # ---- RECENT RESULTS ----
     with tab_results:
-        st.subheader(f"{comp_label} — Recent Matches")
-        limit = st.slider("How many matches to show?", 5, 30, 10)
+        st.subheader(f"{comp_label} — Match Results")
+
+        # Filter mode: recent results OR specific gameweek
+        filter_col, gw_col, limit_col = st.columns([1.4, 1, 1])
+
+        with filter_col:
+            filter_mode = st.radio(
+                "Browse by",
+                options=["📅 Most Recent", "🗓️ Gameweek"],
+                horizontal=True,
+            )
+
+        use_gameweek = filter_mode == "🗓️ Gameweek"
+
+        with gw_col:
+            gameweek = st.number_input(
+                "Gameweek",
+                min_value=1,
+                max_value=38,
+                value=1,
+                step=1,
+                disabled=not use_gameweek,
+            )
+
+        with limit_col:
+            limit = st.slider(
+                "Max matches",
+                min_value=5,
+                max_value=30,
+                value=10,
+                disabled=use_gameweek,
+            )
+
         with st.spinner("Fetching matches…"):
             try:
-                matches = sync.get_recent_matches(comp_id, limit=limit)
+                if use_gameweek:
+                    matches = sync.get_recent_matches(
+                        comp_id, matchday=int(gameweek)
+                    )
+                    if matches:
+                        st.caption(f"Showing all matches for **Gameweek {int(gameweek)}**")
+                    else:
+                        st.info(f"No matches found for Gameweek {int(gameweek)}.")
+                else:
+                    matches = sync.get_recent_matches(comp_id, limit=limit)
+                    if matches:
+                        st.caption(f"Showing the **{len(matches)}** most recent finished matches.")
                 _render_matches(matches)
             except Exception as exc:
                 st.error(f"Could not load matches: {exc}")

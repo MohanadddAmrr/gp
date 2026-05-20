@@ -487,7 +487,7 @@ class FootballDataConnector(BaseAPIConnector):
         else:
             endpoint = "matches"
             
-        cache_key = f"football_data_matches_{competition_id}_{date_from}_{date_to}"
+        cache_key = f"football_data_matches_{competition_id}_{date_from}_{date_to}_{matchday}"
         cached = self._get_cached(cache_key)
         if cached:
             return cached

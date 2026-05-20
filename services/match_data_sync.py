@@ -232,23 +232,51 @@ class MatchDataSync:
         self,
         competition_id: str = DEFAULT_COMPETITION,
         limit: int = 10,
+        matchday: Optional[int] = None,
     ) -> List[Dict]:
         """
-        Fetch the most recent FINISHED matches for a competition.
+        Fetch finished matches for a competition, optionally filtered by gameweek.
 
-        Only matches with known scores (home_score is not None) are returned.
-        Results are sorted newest-first.
+        When *matchday* is given, only matches from that specific gameweek are
+        returned (all of them, ignoring *limit*).
+        When *matchday* is None, the most recent finished matches are returned
+        (newest-first, up to *limit*).
 
         Args:
             competition_id: football-data.org competition ID.
-            limit:          Max number of matches to return.
+            limit:          Max number of matches to return (ignored when matchday set).
+            matchday:       Gameweek number to filter by (1-38 for most leagues).
 
         Returns:
-            List of raw match dicts (newest first), up to *limit* items.
+            List of raw match dicts, newest-first.
         """
+        connector = self._get_connector()
+
+        if matchday is not None:
+            # Fetch only this gameweek directly from the API
+            match_objects = connector.get_matches(
+                competition_id=competition_id,
+                matchday=matchday,
+            )
+            raw = []
+            for m in match_objects:
+                raw.append({
+                    "match_id":   m.match_id,
+                    "competition": m.competition,
+                    "season":     m.season,
+                    "match_date": m.match_date.isoformat() if m.match_date else "",
+                    "home_team":  m.home_team,
+                    "away_team":  m.away_team,
+                    "home_score": m.home_score,
+                    "away_score": m.away_score,
+                    "source":     m.source,
+                })
+            # Return all matches for that gameweek (finished or scheduled)
+            raw.sort(key=lambda m: m.get("match_date", ""), reverse=True)
+            return raw
+
+        # No gameweek filter — return most recent finished matches
         raw = self.sync_matches(competition_id=competition_id)
-        # Keep only finished matches (score is known)
         finished = [m for m in raw if m.get("home_score") is not None]
-        # Sort newest first
         finished.sort(key=lambda m: m.get("match_date", ""), reverse=True)
         return finished[:limit]
