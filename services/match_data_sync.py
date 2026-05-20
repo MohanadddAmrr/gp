@@ -124,6 +124,7 @@ class MatchDataSync:
         raw_matches = []
 
         for m in match_objects:
+            # Preserve None scores — None means the match hasn't been played yet
             raw = {
                 "match_id": m.match_id,
                 "competition": m.competition,
@@ -131,11 +132,15 @@ class MatchDataSync:
                 "match_date": m.match_date.isoformat() if m.match_date else "",
                 "home_team": m.home_team,
                 "away_team": m.away_team,
-                "home_score": m.home_score or 0,
-                "away_score": m.away_score or 0,
+                "home_score": m.home_score,   # keep None for unplayed matches
+                "away_score": m.away_score,   # keep None for unplayed matches
                 "source": m.source,
             }
             raw_matches.append(raw)
+
+            # Only persist finished matches (scores known)
+            if m.home_score is None:
+                continue
 
             # Try to persist — tolerate failures
             try:
@@ -143,8 +148,8 @@ class MatchDataSync:
                     video_path=f"api://{m.source}/{m.match_id}",
                     team_a=m.home_team,
                     team_b=m.away_team,
-                    score_a=m.home_score or 0,
-                    score_b=m.away_score or 0,
+                    score_a=m.home_score,
+                    score_b=m.away_score,
                 )
                 saved += 1
             except Exception as exc:
@@ -229,7 +234,10 @@ class MatchDataSync:
         limit: int = 10,
     ) -> List[Dict]:
         """
-        Fetch the most recent finished matches for a competition.
+        Fetch the most recent FINISHED matches for a competition.
+
+        Only matches with known scores (home_score is not None) are returned.
+        Results are sorted newest-first.
 
         Args:
             competition_id: football-data.org competition ID.
@@ -239,6 +247,8 @@ class MatchDataSync:
             List of raw match dicts (newest first), up to *limit* items.
         """
         raw = self.sync_matches(competition_id=competition_id)
+        # Keep only finished matches (score is known)
+        finished = [m for m in raw if m.get("home_score") is not None]
         # Sort newest first
-        raw.sort(key=lambda m: m.get("match_date", ""), reverse=True)
-        return raw[:limit]
+        finished.sort(key=lambda m: m.get("match_date", ""), reverse=True)
+        return finished[:limit]

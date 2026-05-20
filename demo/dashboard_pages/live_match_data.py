@@ -61,6 +61,63 @@ COMPETITIONS = {
     "🏆 UEFA Champions League":    "2001",
 }
 
+# ---------------------------------------------------------------------------
+# Known team IDs (football-data.org numeric IDs)
+# The free tier ignores the ?name= query param on the /teams endpoint, so we
+# resolve team names to IDs locally and call fetch_squad(id) directly.
+# ---------------------------------------------------------------------------
+
+KNOWN_TEAMS: dict = {
+    # Premier League 2024-25
+    "Arsenal FC":                    57,
+    "Aston Villa FC":                58,
+    "AFC Bournemouth":             1044,
+    "Brentford FC":                 402,
+    "Brighton & Hove Albion FC":    397,
+    "Chelsea FC":                    61,
+    "Crystal Palace FC":            354,
+    "Everton FC":                    62,
+    "Fulham FC":                     63,
+    "Ipswich Town FC":              394,
+    "Leicester City FC":            338,
+    "Liverpool FC":                  64,
+    "Manchester City FC":            65,
+    "Manchester United FC":          66,
+    "Newcastle United FC":           67,
+    "Nottingham Forest FC":         351,
+    "Southampton FC":               340,
+    "Tottenham Hotspur FC":          73,
+    "West Ham United FC":           563,
+    "Wolverhampton Wanderers FC":    76,
+    # Bundesliga
+    "FC Bayern München":              5,
+    "Borussia Dortmund":              4,
+    "Bayer 04 Leverkusen":            3,
+    "RB Leipzig":                   721,
+    "Eintracht Frankfurt":           19,
+    "VfB Stuttgart":                 10,
+    # La Liga
+    "Real Madrid CF":                86,
+    "FC Barcelona":                  81,
+    "Club Atlético de Madrid":       78,
+    "Sevilla FC":                    90,
+    "Real Sociedad de Fútbol":       92,
+    "Villarreal CF":                 94,
+    # Serie A
+    "Juventus FC":                  109,
+    "FC Internazionale Milano":     108,
+    "AC Milan":                     98,
+    "SSC Napoli":                   113,
+    "AS Roma":                      100,
+    "SS Lazio":                     110,
+    # Ligue 1
+    "Paris Saint-Germain FC":        524,
+    "Olympique de Marseille":        516,
+    "Olympique Lyonnais":            523,
+    "AS Monaco FC":                  548,
+    "Stade Rennais FC 1901":         511,
+}
+
 
 # ---------------------------------------------------------------------------
 # Helper renderers
@@ -183,20 +240,31 @@ def render():
     # ---- SQUAD LOOKUP ----
     with tab_squad:
         st.subheader("Team Squad Lookup")
-        team_name = st.text_input(
-            "Enter team name (e.g. Arsenal FC, Liverpool FC)",
-            placeholder="Arsenal FC",
+        st.caption(
+            "Select a team from the list below. "
+            "Squads are fetched directly by team ID (football-data.org free tier)."
         )
-        if st.button("🔍 Fetch Squad") and team_name.strip():
-            with st.spinner(f"Fetching squad for {team_name}…"):
+
+        team_options = sorted(KNOWN_TEAMS.keys())
+        selected_team = st.selectbox(
+            "Select a team",
+            options=team_options,
+            index=team_options.index("Arsenal FC") if "Arsenal FC" in team_options else 0,
+        )
+
+        if st.button("🔍 Fetch Squad"):
+            team_id = KNOWN_TEAMS[selected_team]
+            with st.spinner(f"Fetching squad for {selected_team}…"):
                 try:
-                    squad = sync.sync_team_squad(team_name.strip())
+                    # Get the raw connector so we can call fetch_squad(id) directly
+                    connector = sync._get_connector()
+                    squad = connector.fetch_squad(team_id)
                     if squad:
-                        st.success(f"Found {len(squad)} players for **{team_name}**")
+                        st.success(f"Found **{len(squad)}** players for **{selected_team}**")
                         rows = [
                             {
-                                "#": p.get("jersey_number", "—"),
-                                "Name": p.get("name", "—"),
+                                "#":        p.get("jersey_number") or "—",
+                                "Name":     p.get("name", "—"),
                                 "Position": p.get("position", "—"),
                             }
                             for p in squad
@@ -204,8 +272,8 @@ def render():
                         st.dataframe(rows, use_container_width=True, hide_index=True)
                     else:
                         st.warning(
-                            f"No squad data found for '{team_name}'. "
-                            "Try the full name, e.g. 'Arsenal FC'."
+                            f"No squad data returned for {selected_team}. "
+                            "The API may be rate-limiting — try again in a moment."
                         )
                 except Exception as exc:
                     st.error(f"Error fetching squad: {exc}")
