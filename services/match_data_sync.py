@@ -228,54 +228,61 @@ class MatchDataSync:
         )
         return standings
 
+    def get_current_matchday(self, competition_id: str = DEFAULT_COMPETITION) -> int:
+        """
+        Return the current (or most recently played) matchday number.
+        Falls back to 1 if the API doesn't provide it.
+        """
+        connector = self._get_connector()
+        md = connector.get_current_matchday(competition_id)
+        return md if md is not None else 1
+
+    def get_matches_by_gameweek(
+        self,
+        competition_id: str = DEFAULT_COMPETITION,
+        matchday: int = 1,
+    ) -> List[Dict]:
+        """
+        Fetch all matches for a specific gameweek, newest-first.
+
+        Args:
+            competition_id: football-data.org competition ID.
+            matchday:       Gameweek / matchday number (1-38).
+
+        Returns:
+            List of raw match dicts for that gameweek.
+        """
+        connector = self._get_connector()
+        match_objects = connector.get_matches(
+            competition_id=competition_id,
+            matchday=matchday,
+        )
+        raw = []
+        for m in match_objects:
+            raw.append({
+                "match_id":    m.match_id,
+                "competition": m.competition,
+                "season":      m.season,
+                "match_date":  m.match_date.isoformat() if m.match_date else "",
+                "home_team":   m.home_team,
+                "away_team":   m.away_team,
+                "home_score":  m.home_score,
+                "away_score":  m.away_score,
+                "source":      m.source,
+                "matchday":    m.matchday,
+            })
+        raw.sort(key=lambda m: m.get("match_date", ""), reverse=True)
+        return raw
+
     def get_recent_matches(
         self,
         competition_id: str = DEFAULT_COMPETITION,
         limit: int = 10,
-        matchday: Optional[int] = None,
     ) -> List[Dict]:
         """
-        Fetch finished matches for a competition, optionally filtered by gameweek.
-
-        When *matchday* is given, only matches from that specific gameweek are
-        returned (all of them, ignoring *limit*).
-        When *matchday* is None, the most recent finished matches are returned
-        (newest-first, up to *limit*).
-
-        Args:
-            competition_id: football-data.org competition ID.
-            limit:          Max number of matches to return (ignored when matchday set).
-            matchday:       Gameweek number to filter by (1-38 for most leagues).
-
-        Returns:
-            List of raw match dicts, newest-first.
+        Fetch the most recent FINISHED matches for a competition (newest-first).
+        Kept for backward compatibility — dashboard now uses get_matches_by_gameweek().
         """
-        connector = self._get_connector()
-
-        if matchday is not None:
-            # Fetch only this gameweek directly from the API
-            match_objects = connector.get_matches(
-                competition_id=competition_id,
-                matchday=matchday,
-            )
-            raw = []
-            for m in match_objects:
-                raw.append({
-                    "match_id":   m.match_id,
-                    "competition": m.competition,
-                    "season":     m.season,
-                    "match_date": m.match_date.isoformat() if m.match_date else "",
-                    "home_team":  m.home_team,
-                    "away_team":  m.away_team,
-                    "home_score": m.home_score,
-                    "away_score": m.away_score,
-                    "source":     m.source,
-                })
-            # Return all matches for that gameweek (finished or scheduled)
-            raw.sort(key=lambda m: m.get("match_date", ""), reverse=True)
-            return raw
-
-        # No gameweek filter — return most recent finished matches
         raw = self.sync_matches(competition_id=competition_id)
         finished = [m for m in raw if m.get("home_score") is not None]
         finished.sort(key=lambda m: m.get("match_date", ""), reverse=True)

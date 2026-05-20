@@ -230,52 +230,32 @@ def render():
     with tab_results:
         st.subheader(f"{comp_label} — Match Results")
 
-        # Filter mode: recent results OR specific gameweek
-        filter_col, gw_col, limit_col = st.columns([1.4, 1, 1])
+        # Auto-detect current matchday on first load
+        with st.spinner("Detecting current gameweek…"):
+            try:
+                current_gw = sync.get_current_matchday(comp_id)
+            except Exception:
+                current_gw = 1
 
-        with filter_col:
-            filter_mode = st.radio(
-                "Browse by",
-                options=["📅 Most Recent", "🗓️ Gameweek"],
-                horizontal=True,
-            )
-
-        use_gameweek = filter_mode == "🗓️ Gameweek"
-
+        gw_col, _ = st.columns([1, 2])
         with gw_col:
             gameweek = st.number_input(
-                "Gameweek",
+                "📅 Gameweek",
                 min_value=1,
                 max_value=38,
-                value=1,
+                value=current_gw,
                 step=1,
-                disabled=not use_gameweek,
+                help="Use the arrows or type a number to browse any gameweek (1–38).",
             )
 
-        with limit_col:
-            limit = st.slider(
-                "Max matches",
-                min_value=5,
-                max_value=30,
-                value=10,
-                disabled=use_gameweek,
-            )
-
-        with st.spinner("Fetching matches…"):
+        with st.spinner(f"Fetching Gameweek {int(gameweek)} matches…"):
             try:
-                if use_gameweek:
-                    matches = sync.get_recent_matches(
-                        comp_id, matchday=int(gameweek)
-                    )
-                    if matches:
-                        st.caption(f"Showing all matches for **Gameweek {int(gameweek)}**")
-                    else:
-                        st.info(f"No matches found for Gameweek {int(gameweek)}.")
+                matches = sync.get_matches_by_gameweek(comp_id, matchday=int(gameweek))
+                if matches:
+                    st.caption(f"Gameweek **{int(gameweek)}** — {len(matches)} matches")
+                    _render_matches(matches)
                 else:
-                    matches = sync.get_recent_matches(comp_id, limit=limit)
-                    if matches:
-                        st.caption(f"Showing the **{len(matches)}** most recent finished matches.")
-                _render_matches(matches)
+                    st.info(f"No matches found for Gameweek {int(gameweek)}.")
             except Exception as exc:
                 st.error(f"Could not load matches: {exc}")
 
