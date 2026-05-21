@@ -1,0 +1,59 @@
+{
+    "match": "Liverpool vs Manchester City",
+    "teams": {
+        "A": {
+            "name": "Liverpool",
+            "jersey_color": "red",
+            "players": {
+                "1": "Alisson Becker",
+                "3": "Wataru Endo",
+                "4": "Virgil van Dijk",
+                "5": "Ibrahima Konate",
+                "7": "Luis Diaz",
+                "8": "Dominik Szoboszlai",
+                "9": "Darwin Nunez",
+                "10": "Alexis Mac Allister",
+                "11": "Mohamed Salah",
+                "17": "Curtis Jones",
+                "18": "Cody Gakpo",
+                "19": "Harvey Elliott",
+                "20": "Diogo Jota",
+                "21": "Kostas Tsimikas",
+                "26": "Andrew Robertson",
+                "38": "Ryan Gravenberch",
+                "50": "Vitezslav Jaros",
+                "62": "Caoimhin Kelleher",
+                "66": "Trent Alexander-Arnold",
+                "78": "Jarell Quansah"
+            }
+        },
+        "B": {
+            "name": "Manchester City",
+            "jersey_color": "lightblue",
+            "players": {
+                "2": "Kyle Walker",
+                "3": "Ruben Dias",
+                "4": "Kalvin Phillips",
+                "5": "John Stones",
+                "6": "Nathan Ake",
+                "7": "Joao Cancelo",
+                "8": "Mateo Kovacic",
+                "9": "Erling Haaland",
+                "10": "Jack Grealish",
+                "11": "Jeremy Doku",
+                "16": "Rodri",
+                "17": "Kevin De Bruyne",
+                "18": "Stefan Ortega",
+                "19": "Julian Alvarez",
+                "20": "Bernardo Silva",
+                "21": "Sergio Gomez",
+                "24": "Josko Gvardiol",
+                "25": "Manuel Akanji",
+                "31": "Ederson",
+                "47": "Phil Foden",
+                "52": "Oscar Bobb",
+                "82": "Rico Lewis"
+            }
+        }
+    }
+}

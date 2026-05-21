@@ -1,0 +1,39 @@
+{
+    "match": "Test Match",
+    "teams": {
+        "A": {
+            "name": "Home Team",
+            "jersey_color": "red",
+            "players": {
+                "1": "Home Goalkeeper",
+                "2": "Home Defender 1",
+                "3": "Home Defender 2",
+                "4": "Home Defender 3",
+                "5": "Home Defender 4",
+                "6": "Home Midfielder 1",
+                "7": "Home Midfielder 2",
+                "8": "Home Midfielder 3",
+                "9": "Home Forward 1",
+                "10": "Home Forward 2",
+                "11": "Home Forward 3"
+            }
+        },
+        "B": {
+            "name": "Away Team",
+            "jersey_color": "blue",
+            "players": {
+                "1": "Away Goalkeeper",
+                "2": "Away Defender 1",
+                "3": "Away Defender 2",
+                "4": "Away Defender 3",
+                "5": "Away Defender 4",
+                "6": "Away Midfielder 1",
+                "7": "Away Midfielder 2",
+                "8": "Away Midfielder 3",
+                "9": "Away Forward 1",
+                "10": "Away Forward 2",
+                "11": "Away Forward 3"
+            }
+        }
+    }
+}
