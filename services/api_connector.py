@@ -659,6 +659,14 @@ class FootballDataConnector(BaseAPIConnector):
         logger.info("Fetched %d players for %s (ID %s)", len(squad), data.get("name", ""), team_id)
         return squad
 
+    def fetch_team_squad(self, external_id: int) -> List[Dict]:
+        """
+        Squad by football-data.org team id (C2 / Member E sync hook).
+
+        Delegates to :meth:`fetch_squad` which already resolves ``teams/{id}``.
+        """
+        return self.fetch_squad(external_id)
+
     def fetch_and_save_squad(self, team_name: str, db_manager) -> List[Dict]:
         """
         Fetch squad from football-data.org and persist to the database.

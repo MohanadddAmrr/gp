@@ -11,12 +11,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from services.database_manager import DatabaseManager
-from services.roster_sync_service import RosterSyncService
+from services.dynamic_roster_manager import DynamicRosterManager
 
 def main():
     roster_dir = Path("rosters")
     db = DatabaseManager()
-    sync_service = RosterSyncService(db)
+    db.initialize_database()
+    dyn = DynamicRosterManager(Path(db.db_path))
 
     if len(sys.argv) > 1:
         files = [Path(a) for a in sys.argv[1:]]
@@ -24,21 +25,16 @@ def main():
         files = sorted(roster_dir.glob("*.json"))
 
     total_players = 0
-    total_rosters = 0
-    
-    for f in files:
-        if f.name == "test.json":
-            continue
-            
-        print(f"Processing {f.name}...")
-        results = sync_service.sync_from_json(f)
-        
-        for side, result in results.items():
-            print(f"  Side {side}: Roster ID {result.roster_id}, {result.players_upserted} players added/updated.")
-            total_players += result.players_upserted
-            total_rosters += 1
+    total_files = 0
 
-    print(f"\nDone! Seeded {total_rosters} rosters and {total_players} players into dynamic roster tables.")
+    for f in files:
+        print(f"Processing {f.name}...")
+        summary = dyn.bulk_import_from_json(f)
+        total_players += int(summary.get("players_touched", 0))
+        total_files += 1
+        print(f"  teams_touched={summary.get('teams_touched')}, players_touched={summary.get('players_touched')}")
+
+    print(f"\nDone! Imported {total_files} roster file(s); player row operations: {total_players} (C2 lineup tables).")
 
 if __name__ == "__main__":
     main()

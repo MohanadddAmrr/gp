@@ -18,6 +18,8 @@ __all__ = [
     'EventDetector',
     'BatchProcessor',
     'RosterSyncService',
+    'RosterManager',
+    'DynamicRosterManager',
 ]
 
 def __getattr__(name):
@@ -39,4 +41,10 @@ def __getattr__(name):
     elif name == 'RosterSyncService':
         from services.roster_sync_service import RosterSyncService
         return RosterSyncService
+    elif name == 'RosterManager':
+        from services.roster_manager import RosterManager
+        return RosterManager
+    elif name == 'DynamicRosterManager':
+        from services.dynamic_roster_manager import DynamicRosterManager
+        return DynamicRosterManager
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

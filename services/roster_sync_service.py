@@ -4,7 +4,11 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from services.api_connector import APIManager
+    from services.dynamic_roster_manager import DynamicRosterManager
 
 logger = logging.getLogger(__name__)
 
@@ -18,128 +22,177 @@ class RosterSyncResult:
 
 class RosterSyncService:
     """
-    Skeleton service to sync roster data into the database.
-
-    Current DB model (see `services/database_schema.py`):
-    - `players_master`: long-lived player master records
-    - `rosters`: roster header (team + optional match scope)
-    - `roster_players`: roster membership rows
-
-    This service is intentionally minimal: it provides stable entrypoints and
-    safe idempotent upsert semantics, leaving provider-specific mapping for later.
+    Roster sync:
+    - **Dynamic mode** (C2): `RosterSyncService(api, roster_manager)` — football-data.org squads
+      into `lineup_teams` / `lineup_players` via `DynamicRosterManager`.
+    - **Legacy mode**: `RosterSyncService(db_manager=db)` — Sprint blueprint `teams` /
+      `roster_players` / `match_rosters` via `DatabaseManager`.
     """
 
-    def __init__(self, db_manager):
-        # `db_manager` is expected to be `services.database_manager.DatabaseManager`.
+    def __init__(
+        self,
+        api: Optional["APIManager"] = None,
+        roster_manager: Optional["DynamicRosterManager"] = None,
+        *,
+        db_manager=None,
+    ):
+        self._dynamic = api is not None and roster_manager is not None
+        self.api = api
+        self.roster_manager = roster_manager
         self.db_manager = db_manager
+        if self._dynamic:
+            return
+        if db_manager is not None:
+            return
+        raise TypeError("RosterSyncService requires either (api, roster_manager) or db_manager=...")
 
-    # ---------------------------------------------------------------------
-    # Public entrypoints
-    # ---------------------------------------------------------------------
+    def sync_team_squad(self, team_external_id: int) -> int:
+        """
+        Pull squad for a football-data.org team id and upsert into dynamic roster tables.
+
+        Uses ``FootballDataConnector.fetch_team_squad`` when the football_data connector
+        is registered; otherwise falls back to a **mock** that scans ``rosters/*.json``
+        (TODO: replace with Member E-only API once fully wired).
+        """
+        if not self._dynamic or self.api is None or self.roster_manager is None:
+            raise RuntimeError("sync_team_squad requires api + roster_manager constructor mode")
+
+        squad: List[Dict[str, Any]] = []
+        fd = self.api.connectors.get("football_data")
+        if fd is not None and hasattr(fd, "fetch_team_squad"):
+            squad = fd.fetch_team_squad(team_external_id)  # type: ignore[assignment]
+        if not squad:
+            squad = self._mock_squad_from_local_json(team_external_id)
+        if not squad:
+            logger.warning("sync_team_squad: no squad rows for external_id=%s", team_external_id)
+            return 0
+
+        team_name = f"API Team {team_external_id}"
+        if fd is not None:
+            try:
+                raw = fd._make_request(f"teams/{team_external_id}")  # type: ignore[attr-defined]
+                if isinstance(raw, dict) and raw.get("name"):
+                    team_name = str(raw["name"])
+            except Exception as ex:
+                logger.debug("Could not resolve team name from API: %s", ex)
+
+        tid = self.roster_manager.create_team(team_name, str(team_external_id)[:3], "#FFFFFF", "#000000")
+        n = 0
+        for p in squad:
+            name = str(p.get("name") or "").strip()
+            if not name:
+                continue
+            jn = p.get("jersey_number")
+            if jn is not None:
+                try:
+                    jn = int(jn)
+                except (TypeError, ValueError):
+                    jn = None
+            pos = p.get("position")
+            pos = str(pos).strip() if pos else None
+            self.roster_manager.create_player(tid, name, jn, pos)
+            n += 1
+        return n
+
+    def _mock_squad_from_local_json(self, team_external_id: int) -> List[Dict[str, Any]]:
+        """
+        TODO(Member E): remove once ``fetch_team_squad`` is the only path.
+
+        Deterministic mock: even id → side A players of first ``rosters/*.json``,
+        odd id → side B.
+        """
+        root = Path(__file__).resolve().parents[1]
+        roster_dir = root / "rosters"
+        files = sorted(roster_dir.glob("*.json"))
+        if not files:
+            return []
+        try:
+            data = json.loads(files[0].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        teams = data.get("teams") or {}
+        side = "A" if team_external_id % 2 == 0 else "B"
+        block = teams.get(side) or {}
+        players = block.get("players") or {}
+        out: List[Dict[str, Any]] = []
+        for jk, payload in players.items():
+            try:
+                jn = int(str(jk).strip())
+            except ValueError:
+                jn = None
+            if isinstance(payload, str):
+                out.append({"name": payload, "jersey_number": jn, "position": None})
+            elif isinstance(payload, dict):
+                nm = payload.get("name") or payload.get("full_name") or "Unknown"
+                out.append(
+                    {
+                        "name": str(nm),
+                        "jersey_number": jn,
+                        "position": payload.get("position"),
+                    }
+                )
+        return out
 
     def sync_from_json(
         self,
         roster_path: Path | str,
         *,
-        match_id: int | None = None,
+        match_id: int | str | None = None,
         source: str = "json",
     ) -> Dict[str, RosterSyncResult]:
-        """
-        Sync roster JSON (same format used by `PlayerIdentityManager`).
-
-        Returns a dict keyed by side ('A'/'B') with per-team results.
-        """
+        """Legacy: sync roster JSON into DatabaseManager blueprint tables."""
+        if self._dynamic or self.db_manager is None:
+            raise RuntimeError("sync_from_json requires legacy db_manager= constructor mode")
         roster_path = Path(roster_path)
         data = json.loads(roster_path.read_text(encoding="utf-8"))
 
         teams = (data.get("teams") or {})
         results: Dict[str, RosterSyncResult] = {}
 
+        home_tid = None
+        away_tid = None
+
         for side in ("A", "B"):
             team_info = teams.get(side) or {}
             team_name = team_info.get("name") or f"Team {side}"
+            color = team_info.get("jersey_color") or (
+                "#FFFFFF" if side == "A" else "#000000"
+            )
             players = team_info.get("players") or {}
 
-            results[side] = self._sync_team_roster(
-                team_name=team_name,
-                side=side,
-                players_by_jersey=players,
-                match_id=match_id,
-                source=source,
+            tid = self.db_manager.add_team(team_name, primary_color=color)
+            if side == "A":
+                home_tid = tid
+            else:
+                away_tid = tid
+
+            players_added = 0
+            for jersey_str, payload in players.items():
+                jersey_number, player_name, position = self._normalize_json_player(
+                    jersey_str, payload
+                )
+                self.db_manager.add_player(tid, player_name, jersey_number, position)
+                players_added += 1
+
+            results[side] = RosterSyncResult(
+                roster_id=tid,
+                players_upserted=players_added,
+                roster_players_upserted=players_added,
             )
+
+        match_name = data.get("match") or str(match_id or roster_path.stem)
+        if home_tid and away_tid:
+            self.db_manager.assign_roster_to_match(match_name, home_tid, away_tid)
+            stem_key = roster_path.stem
+            if str(stem_key) != str(match_name):
+                self.db_manager.assign_roster_to_match(stem_key, home_tid, away_tid)
 
         return results
 
-    def sync_from_provider(
-        self,
-        provider: str,
-        *,
-        team_name: str,
-        season: str | None = None,
-        match_id: int | None = None,
-    ) -> Dict[str, Any]:
-        """
-        Placeholder for API/provider-based roster sync (StatsBomb/Opta/etc.).
-        """
-        raise NotImplementedError(
-            f"Provider sync not implemented yet (provider={provider}, team={team_name}, season={season}, match_id={match_id})"
-        )
-
-    # ---------------------------------------------------------------------
-    # Internal helpers (idempotent upserts)
-    # ---------------------------------------------------------------------
-
-    def _sync_team_roster(
-        self,
-        *,
-        team_name: str,
-        side: str | None,
-        players_by_jersey: Dict[str, Any],
-        match_id: int | None,
-        source: str,
-    ) -> RosterSyncResult:
-        """
-        Upsert a roster for a team + optional match scope, then upsert members.
-        """
-        with self.db_manager._get_connection() as conn:  # noqa: SLF001 (existing project pattern)
-            cur = conn.cursor()
-
-            # 1) Upsert roster header (match-scoped rosters can have both A/B).
-            roster_id = self._upsert_roster(cur, match_id=match_id, team_name=team_name, side=side, source=source)
-
-            # 2) Upsert players + membership rows.
-            players_upserted = 0
-            roster_players_upserted = 0
-
-            for jersey_str, payload in players_by_jersey.items():
-                jersey_number, player_name, position = self._normalize_json_player(jersey_str, payload)
-                player_id = self._upsert_player_master(cur, full_name=player_name)
-                players_upserted += 1
-
-                self._upsert_roster_player(
-                    cur,
-                    roster_id=roster_id,
-                    player_id=player_id,
-                    profile_id=None,
-                    jersey_number=jersey_number,
-                    position=position,
-                    is_starting=False,
-                    metadata=None,
-                )
-                roster_players_upserted += 1
-
-            return RosterSyncResult(
-                roster_id=roster_id,
-                players_upserted=players_upserted,
-                roster_players_upserted=roster_players_upserted,
-            )
-
     @staticmethod
-    def _normalize_json_player(jersey_str: str, payload: Any) -> Tuple[int | None, str, str | None]:
-        """
-        The roster JSON is usually { "<jersey>": "<name>" } but sometimes can be richer.
-        Returns (jersey_number, full_name, position)
-        """
+    def _normalize_json_player(
+        jersey_str: str, payload: Any
+    ) -> Tuple[Optional[int], str, Optional[str]]:
         try:
             jersey_number = int(jersey_str)
         except Exception:
@@ -148,121 +201,13 @@ class RosterSyncService:
         if isinstance(payload, str):
             return jersey_number, payload, None
         if isinstance(payload, dict):
-            name = payload.get("name") or payload.get("full_name") or payload.get("player_name") or "Unknown"
+            name = (
+                payload.get("name")
+                or payload.get("full_name")
+                or payload.get("player_name")
+                or "Unknown"
+            )
             position = payload.get("position")
             return jersey_number, str(name), str(position) if position is not None else None
 
         return jersey_number, str(payload), None
-
-    @staticmethod
-    def _upsert_roster(cur, *, match_id: int | None, team_name: str, side: str | None, source: str) -> int:
-        # Try to find an existing roster header.
-        if match_id is None:
-            cur.execute(
-                """
-                SELECT roster_id FROM rosters
-                WHERE match_id IS NULL AND team_name = ? AND (side IS ? OR side IS NULL)
-                ORDER BY roster_id DESC
-                LIMIT 1
-                """,
-                (team_name, side),
-            )
-        else:
-            cur.execute(
-                """
-                SELECT roster_id FROM rosters
-                WHERE match_id = ? AND team_name = ? AND (side = ? OR (? IS NULL AND side IS NULL))
-                LIMIT 1
-                """,
-                (match_id, team_name, side, side),
-            )
-        row = cur.fetchone()
-        if row:
-            roster_id = int(row[0])
-            cur.execute(
-                "UPDATE rosters SET source = ?, updated_at = CURRENT_TIMESTAMP WHERE roster_id = ?",
-                (source, roster_id),
-            )
-            return roster_id
-
-        cur.execute(
-            """
-            INSERT INTO rosters (match_id, team_name, side, source)
-            VALUES (?, ?, ?, ?)
-            """,
-            (match_id, team_name, side, source),
-        )
-        return int(cur.lastrowid)
-
-    @staticmethod
-    def _upsert_player_master(cur, *, full_name: str) -> int:
-        # Minimal identity: full_name (can be expanded later with external_ids/profile_id).
-        cur.execute("SELECT player_id FROM players_master WHERE full_name = ? LIMIT 1", (full_name,))
-        row = cur.fetchone()
-        if row:
-            player_id = int(row[0])
-            cur.execute("UPDATE players_master SET updated_at = CURRENT_TIMESTAMP WHERE player_id = ?", (player_id,))
-            return player_id
-
-        cur.execute(
-            "INSERT INTO players_master (full_name) VALUES (?)",
-            (full_name,),
-        )
-        return int(cur.lastrowid)
-
-    @staticmethod
-    def _upsert_roster_player(
-        cur,
-        *,
-        roster_id: int,
-        player_id: int | None,
-        profile_id: int | None,
-        jersey_number: int | None,
-        position: str | None,
-        is_starting: bool,
-        metadata: Dict[str, Any] | None,
-    ) -> int:
-        # Rely on `uq_roster_player_identity` unique index (ifnull-based) for idempotency.
-        metadata_json = json.dumps(metadata) if metadata else None
-        cur.execute(
-            """
-            INSERT OR IGNORE INTO roster_players
-              (roster_id, player_id, profile_id, jersey_number, position, is_starting, metadata)
-            VALUES
-              (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (roster_id, player_id, profile_id, jersey_number, position, int(is_starting), metadata_json),
-        )
-        if cur.lastrowid:
-            return int(cur.lastrowid)
-
-        # Update the existing row (best-effort).
-        cur.execute(
-            """
-            SELECT roster_player_id FROM roster_players
-            WHERE roster_id = ?
-              AND player_id IS ?
-              AND profile_id IS ?
-              AND jersey_number IS ?
-            LIMIT 1
-            """,
-            (roster_id, player_id, profile_id, jersey_number),
-        )
-        row = cur.fetchone()
-        if not row:
-            # Should be unreachable, but keep the service resilient.
-            raise RuntimeError("Failed to upsert roster_players row")
-
-        roster_player_id = int(row[0])
-        cur.execute(
-            """
-            UPDATE roster_players
-            SET position = COALESCE(?, position),
-                is_starting = ?,
-                metadata = COALESCE(?, metadata)
-            WHERE roster_player_id = ?
-            """,
-            (position, int(is_starting), metadata_json, roster_player_id),
-        )
-        return roster_player_id
-

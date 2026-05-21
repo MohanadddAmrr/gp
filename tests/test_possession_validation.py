@@ -35,14 +35,10 @@ def test_possession_data_integrity():
     
     demo_outputs = project_root / "demo" / "demo_outputs"
     
-    if not demo_outputs.exists():
-        print("❌ No demo outputs found. Run demo/run_demo.py first.")
-        return False
+    assert demo_outputs.exists(), "❌ No demo outputs found. Run demo/run_demo.py first."
     
     videos = list(demo_outputs.iterdir())
-    if not videos:
-        print("❌ No processed videos found.")
-        return False
+    assert videos, "❌ No processed videos found."
     
     all_passed = True
     
@@ -51,7 +47,7 @@ def test_possession_data_integrity():
             continue
         
         metrics_file = video_dir / "metrics.json"
-        if not metrics_file.exists():
+        if not metrics_file.exists() or metrics_file.stat().st_size == 0:
             continue
         
         print(f"\n✓ Checking: {video_dir.name}")
@@ -98,7 +94,7 @@ def test_possession_data_integrity():
         else:
             print(f"  ✅ PASS: Reasonable possession changes ({poss_changes} in {total_frames} frames)")
     
-    return all_passed
+    assert all_passed, "❌ Some data integrity checks failed."
 
 
 def test_zone_statistics():
@@ -115,9 +111,7 @@ def test_zone_statistics():
     
     demo_outputs = project_root / "demo" / "demo_outputs"
     
-    if not demo_outputs.exists():
-        print("❌ No demo outputs found.")
-        return False
+    assert demo_outputs.exists(), "❌ No demo outputs found."
     
     all_passed = True
     
@@ -126,7 +120,7 @@ def test_zone_statistics():
             continue
         
         metrics_file = video_dir / "metrics.json"
-        if not metrics_file.exists():
+        if not metrics_file.exists() or metrics_file.stat().st_size == 0:
             continue
         
         print(f"\n✓ Checking: {video_dir.name}")
@@ -170,7 +164,7 @@ def test_zone_statistics():
                     print(f"  ❌ FAIL: Invalid zone name '{zone_name}'")
                     all_passed = False
     
-    return all_passed
+    assert all_passed, "❌ Some zone statistics checks failed."
 
 
 def test_pressure_statistics():
@@ -187,9 +181,7 @@ def test_pressure_statistics():
     
     demo_outputs = project_root / "demo" / "demo_outputs"
     
-    if not demo_outputs.exists():
-        print("❌ No demo outputs found.")
-        return False
+    assert demo_outputs.exists(), "❌ No demo outputs found."
     
     all_passed = True
     
@@ -198,7 +190,7 @@ def test_pressure_statistics():
             continue
         
         metrics_file = video_dir / "metrics.json"
-        if not metrics_file.exists():
+        if not metrics_file.exists() or metrics_file.stat().st_size == 0:
             continue
         
         print(f"\n✓ Checking: {video_dir.name}")
@@ -237,7 +229,7 @@ def test_pressure_statistics():
         else:
             print(f"  ✅ PASS: Average pressure is reasonable")
     
-    return all_passed
+    assert all_passed, "❌ Some pressure statistics checks failed."
 
 
 def test_duration_statistics():
@@ -255,9 +247,7 @@ def test_duration_statistics():
     
     demo_outputs = project_root / "demo" / "demo_outputs"
     
-    if not demo_outputs.exists():
-        print("❌ No demo outputs found.")
-        return False
+    assert demo_outputs.exists(), "❌ No demo outputs found."
     
     all_passed = True
     
@@ -266,7 +256,7 @@ def test_duration_statistics():
             continue
         
         metrics_file = video_dir / "metrics.json"
-        if not metrics_file.exists():
+        if not metrics_file.exists() or metrics_file.stat().st_size == 0:
             continue
         
         print(f"\n✓ Checking: {video_dir.name}")
@@ -316,7 +306,7 @@ def test_duration_statistics():
         else:
             print(f"  ✅ PASS: Duration percentages add up correctly")
     
-    return all_passed
+    assert all_passed, "❌ Some duration statistics checks failed."
 
 
 def run_all_tests():
@@ -328,31 +318,36 @@ def run_all_tests():
     print("\nThese tests validate possession tracking on actual processed videos.")
     print("Make sure you've run demo/run_demo.py first to generate test data.\n")
     
+    tests = [
+        ("Data Integrity", test_possession_data_integrity),
+        ("Zone Statistics", test_zone_statistics),
+        ("Pressure Statistics", test_pressure_statistics),
+        ("Duration Statistics", test_duration_statistics)
+    ]
+    
     results = []
+    all_passed = True
     
-    # Test 1: Data Integrity
-    results.append(("Data Integrity", test_possession_data_integrity()))
-    
-    # Test 2: Zone Statistics
-    results.append(("Zone Statistics", test_zone_statistics()))
-    
-    # Test 3: Pressure Statistics
-    results.append(("Pressure Statistics", test_pressure_statistics()))
-    
-    # Test 4: Duration Statistics
-    results.append(("Duration Statistics", test_duration_statistics()))
-    
+    for name, test_func in tests:
+        try:
+            test_func()
+            results.append((name, True))
+        except AssertionError as e:
+            results.append((name, False))
+            all_passed = False
+        except Exception as e:
+            print(f"❌ Test {name} encountered error: {e}")
+            results.append((name, False))
+            all_passed = False
+            
     # Summary
     print("\n" + "=" * 70)
     print("TEST SUMMARY")
     print("=" * 70)
     
-    all_passed = True
     for test_name, passed in results:
         status = "✅ PASS" if passed else "❌ FAIL"
         print(f"{test_name}: {status}")
-        if not passed:
-            all_passed = False
     
     print("=" * 70)
     

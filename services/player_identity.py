@@ -19,10 +19,19 @@ REQUIREMENTS:
 
 import cv2
 import numpy as np
+import logging
 from typing import Dict, List, Optional, Tuple, Any
 from collections import Counter, defaultdict
 from pathlib import Path
 import json
+
+logger = logging.getLogger(__name__)
+
+try:
+    from services.roster_io_sentinel import track_json_file_read
+except ImportError:
+    def track_json_file_read() -> None:  # pragma: no cover
+        pass
 
 
 class JerseyColorClassifier:
@@ -441,6 +450,7 @@ class RosterConfig:
                 data = json.load(f)
             self.match_name = data.get("match", "")
             self.teams = data.get("teams", {})
+            track_json_file_read()
             return True
         except Exception as e:
             print(f"  [!] Failed to load roster: {e}")
@@ -449,42 +459,89 @@ class RosterConfig:
     def load_from_db(self, db_manager, team_a_name: str, team_b_name: str,
                      team_a_color: str = None, team_b_color: str = None) -> bool:
         """
-        Load rosters from the database using DynamicRosterManager instead of a JSON file.
-
-        Args:
-            db_manager: DatabaseManager instance
-            team_a_name: Name of team A (e.g. "Liverpool")
-            team_b_name: Name of team B (e.g. "Manchester City")
-            team_a_color: Optional jersey color for team A
-            team_b_color: Optional jersey color for team B
-
-        Returns:
-            True if at least one team had players in the DB
+        Load rosters from the database using DatabaseManager CRUD methods.
         """
-        from services.dynamic_roster_manager import DynamicRosterManager
-        roster_mgr = DynamicRosterManager(db_manager)
-        
         self.match_name = f"{team_a_name} vs {team_b_name}"
         self.teams = {}
 
-        for side, name, color in [("A", team_a_name, team_a_color),
-                                   ("B", team_b_name, team_b_color)]:
-            
-            # Fetch active roster id
-            active_roster_id = roster_mgr.fetch_active_roster(team_name=name, side=side)
+        # Get all teams to find matching IDs by name
+        all_teams = db_manager.list_teams()
+        team_map = {t['name'].lower(): t for t in all_teams}
+
+        for side, name, color_fallback in [("A", team_a_name, team_a_color),
+                                           ("B", team_b_name, team_b_color)]:
             players = {}
-            if active_roster_id:
-                roster_players = roster_mgr.get_roster_players(active_roster_id)
-                for p in roster_players:
-                    if p.get("jersey_number") is not None:
-                        players[str(p["jersey_number"])] = p.get("full_name") or f"Player {p['player_id']}"
+            color = color_fallback
+            
+            t_info = team_map.get(name.lower())
+            if t_info:
+                tid = t_info['team_id']
+                if t_info.get('primary_color') and t_info['primary_color'] != '#FFFFFF':
+                    color = t_info['primary_color']
+                
+                lookup = db_manager.get_roster_lookup(tid)
+                players = {str(k): v for k, v in lookup.items()}
 
             team_entry = {"name": name, "players": players}
             if color:
                 team_entry["jersey_color"] = color
             self.teams[side] = team_entry
 
-        return self.is_loaded()
+        total_players = sum(len(t.get("players", {})) for t in self.teams.values())
+        return total_players > 0
+
+    def load_from_bundle(self, data: Dict[str, Any]) -> bool:
+        """Load from a JSON-shaped dict (e.g. DynamicRosterManager.roster_identity_bundle_from_stem)."""
+        if not data or not isinstance(data, dict):
+            return False
+        self.match_name = str(data.get("match") or "")
+        self.teams = dict(data.get("teams") or {})
+        return bool(self.teams)
+
+    def load_from_match_roster(
+        self,
+        roster_data: Dict[str, Any],
+        team_a_color: Optional[str] = None,
+        team_b_color: Optional[str] = None,
+    ) -> bool:
+        """
+        Populate roster from DatabaseManager.get_match_roster() shape:
+        home_team / away_team with name, players (jersey str -> name), optional colors.
+        """
+        ht = roster_data.get("home_team") or {}
+        at = roster_data.get("away_team") or {}
+        if not ht.get("name") or not at.get("name"):
+            return False
+        hp = ht.get("players") or {}
+        ap = at.get("players") or {}
+        if not hp and not ap:
+            return False
+
+        self.match_name = f"{ht['name']} vs {at['name']}"
+        self.teams = {
+            "A": {"name": ht["name"], "players": {str(k): v for k, v in hp.items()}},
+            "B": {"name": at["name"], "players": {str(k): v for k, v in ap.items()}},
+        }
+
+        def jersey_hint(team_row: Dict, override: Optional[str]) -> Optional[str]:
+            if override:
+                return override
+            jc = team_row.get("jersey_color")
+            if jc:
+                return jc
+            pc = team_row.get("primary_color")
+            if isinstance(pc, str) and pc and not pc.startswith("#"):
+                return pc
+            return None
+
+        h_color = jersey_hint(ht, team_a_color)
+        a_color = jersey_hint(at, team_b_color)
+        if h_color:
+            self.teams["A"]["jersey_color"] = h_color
+        if a_color:
+            self.teams["B"]["jersey_color"] = a_color
+
+        return True
 
     def get_player_name(self, team: str, jersey_number: int) -> Optional[str]:
         """Look up player name by team and jersey number."""
@@ -503,11 +560,42 @@ class RosterConfig:
 class PlayerIdentityManager:
     def __init__(self, roster_path: Optional[Path] = None, enable_ocr: bool = True,
                  db_manager=None, team_a_name: str = None, team_b_name: str = None,
-                 team_a_color: str = None, team_b_color: str = None):
+                 team_a_color: str = None, team_b_color: str = None,
+                 roster_manager=None, match_id: Optional[str] = None,
+                 roster_bundle: Optional[Dict[str, Any]] = None):
         self.roster = RosterConfig()
 
-        # Priority: DB roster > JSON file
-        if db_manager and team_a_name and team_b_name:
+        mid = str(match_id) if match_id is not None else None
+
+        # 1) Sprint blueprint match_rosters + roster_players (via RosterManager.get_player_lookup)
+        if roster_manager is not None and mid:
+            lookup = roster_manager.get_player_lookup(mid)
+            if lookup is not None:
+                full = roster_manager.db.get_match_roster(mid)
+                if full and self.roster.load_from_match_roster(
+                    full,
+                    team_a_color=team_a_color,
+                    team_b_color=team_b_color,
+                ):
+                    a_count = len(self.roster.teams.get("A", {}).get("players", {}))
+                    b_count = len(self.roster.teams.get("B", {}).get("players", {}))
+                    ta = self.roster.teams.get("A", {}).get("name", "Team A")
+                    tb = self.roster.teams.get("B", {}).get("name", "Team B")
+                    print(f"  Roster loaded from database (match roster): {self.roster.match_name}")
+                    print(f"    {ta}: {a_count} players, {tb}: {b_count} players")
+
+        # 2) C2 dynamic lineup tables (lineup_teams / lineup_players / match_lineups)
+        if not self.roster.is_loaded() and roster_bundle:
+            if self.roster.load_from_bundle(roster_bundle):
+                a_count = len(self.roster.teams.get("A", {}).get("players", {}))
+                b_count = len(self.roster.teams.get("B", {}).get("players", {}))
+                ta = self.roster.teams.get("A", {}).get("name", "Team A")
+                tb = self.roster.teams.get("B", {}).get("name", "Team B")
+                print(f"  Roster loaded from dynamic lineup (C2): {self.roster.match_name}")
+                print(f"    {ta}: {a_count} players, {tb}: {b_count} players")
+
+        # 3) Legacy: player_profiles keyed by team name
+        if not self.roster.is_loaded() and db_manager and team_a_name and team_b_name:
             loaded = self.roster.load_from_db(
                 db_manager, team_a_name, team_b_name,
                 team_a_color=team_a_color, team_b_color=team_b_color,
@@ -517,10 +605,33 @@ class PlayerIdentityManager:
                 b_count = len(self.roster.teams.get("B", {}).get("players", {}))
                 print(f"  Roster loaded from DB: {self.roster.match_name}")
                 print(f"    {team_a_name}: {a_count} players, {team_b_name}: {b_count} players")
-        elif roster_path:
-            loaded = self.roster.load(roster_path)
-            if loaded:
-                print(f"  Roster loaded: {self.roster.match_name}")
+
+        # 4) JSON file on disk (deprecated when DB path exists elsewhere)
+        if not self.roster.is_loaded() and roster_path:
+            path = Path(roster_path)
+            if path.exists():
+                loaded = self.roster.load(path)
+                if loaded:
+                    logger.warning(
+                        "Using deprecated JSON roster. Please migrate to database."
+                    )
+                    print(f"  Roster loaded: {self.roster.match_name}")
+            else:
+                logger.warning(
+                    "Roster JSON path missing (%s). Continuing without named players.",
+                    path,
+                )
+
+        if not self.roster.is_loaded():
+            if roster_manager is not None and mid:
+                logger.warning(
+                    "No database match roster for match_id=%r and no usable JSON roster; continuing without named players.",
+                    mid,
+                )
+            else:
+                logger.info(
+                    "No roster loaded; player names require OCR + color data or configure a DB/JSON roster."
+                )
 
         # Extract team colors from roster
         team_colors = {}

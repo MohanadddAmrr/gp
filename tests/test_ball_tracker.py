@@ -151,7 +151,7 @@ def test_prediction():
         tracker.update(bbox, i, i/30.0)
 
     current_pos = tracker.get_position()
-    predicted_pos = tracker.predict_position(1.0)  # 1 second ahead
+    predicted_pos = tracker.predict_next_position(1.0)  # 1 second ahead
 
     print(f"[OK] Current position: {current_pos}")
     print(f"[OK] Predicted position (1s ahead): {predicted_pos}")
@@ -192,7 +192,7 @@ def test_reset():
     print("[OK] Reset functionality test PASSED\n")
 
 
-def test_on_video(video_path: str, max_frames: int = 100):
+def test_on_video(video_path: str = "input_videos/arsenal.mp4", max_frames: int = 100):
     """
     Test tracker on actual video using simple ball detection.
 

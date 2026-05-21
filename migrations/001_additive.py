@@ -20,13 +20,13 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence, Tuple
 
 try:
-    from services.database_schema import SCHEMA_SQL
+    from services.database_schema import SCHEMA_SQL, create_schema
 except ModuleNotFoundError:
     # When executed from a subdirectory (e.g. `python scripts/...`),
     # ensure repository root is on sys.path so `services` is importable.
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
-    from services.database_schema import SCHEMA_SQL
+    from services.database_schema import SCHEMA_SQL, create_schema
 
 
 ColumnSpec = Tuple[str, str]  # (name, sqlite_column_definition)
@@ -68,6 +68,7 @@ def _ensure_columns(conn: sqlite3.Connection, table: str, columns: Sequence[Colu
     for col_name, col_def in columns:
         if col_name in existing:
             continue
+        print(f"DEBUG: Adding missing column {col_name} to {table}")
         # SQLite limitation: ALTER TABLE ... ADD COLUMN only supports constant defaults.
         # If a non-constant default is present (e.g. CURRENT_TIMESTAMP), add the column
         # without that default and backfill existing rows.
@@ -174,14 +175,10 @@ def migrate_001_additive(conn: sqlite3.Connection) -> MigrationResult:
         (
             "roster_players",
             [
-                ("roster_id", "INTEGER"),
-                ("player_id", "INTEGER"),
-                ("profile_id", "INTEGER"),
+                ("team_id", "INTEGER"),
+                ("name", "TEXT"),
                 ("jersey_number", "INTEGER"),
                 ("position", "TEXT"),
-                ("is_starting", "BOOLEAN DEFAULT 0"),
-                ("metadata", "TEXT"),
-                ("created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
             ],
         ),
         (
@@ -369,6 +366,7 @@ def migrate_001_additive(conn: sqlite3.Connection) -> MigrationResult:
 
     # 2) Ensure tables/indexes exist (idempotent).
     conn.executescript(SCHEMA_SQL)
+    create_schema(conn)
 
     return MigrationResult(created_or_verified_schema=True, added_columns=added_cols)
 

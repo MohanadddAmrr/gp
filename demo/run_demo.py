@@ -45,6 +45,9 @@ from services.tracking_filters import (
 )
 from services.player_identity import PlayerIdentityManager
 from services.database_manager import DatabaseManager
+
+from services.dynamic_roster_manager import DynamicRosterManager
+from services.roster_io_sentinel import track_json_file_read
 from services.tactical_analyzer import TacticalAnalyzer
 from services.pitch_transform import PitchTransform, TacticalHeatmapGenerator
 from services.xg_calculator import xGCalculator, ShotType, BodyPart, ShotOutcome
@@ -474,92 +477,47 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     speed_smoother = SpeedSmoother(window_size=3)
     
     # Player identity manager — resolution priority:
-    #   1. Explicit team names passed as args (e.g. from CLI or batch)
-    #   2. Team names extracted from video filename + DB lookup
-    #   3. Roster JSON file + DB lookup
-    #   4. Roster JSON file only (legacy)
-    #   5. No roster at all (color clustering + OCR only)
+    #   1. C2 dynamic lineup tables (DynamicRosterManager)
+    #   2. No roster (color clustering + OCR only)
     identity_manager = None
-    _resolved_ta = team_a_name
-    _resolved_tb = team_b_name
+    _match_id = str(video_path.stem)
+    _dyn_roster = DynamicRosterManager(Path(db_manager.db_path)) if db_manager else None
 
-    # Load team colors from config for any resolved team
-    import yaml as _yaml
-    _team_colors_cfg = {}
-    try:
-        with open(ROOT / "config.yaml", "r", encoding="utf-8") as _cf:
-            _cfg = _yaml.safe_load(_cf)
-        _team_colors_cfg = _cfg.get("team_colors", {})
-    except Exception:
-        pass
-
-    # Path 1: Explicit team names
-    if db_manager and _resolved_ta and _resolved_tb:
-        _ta_roster = db_manager.get_roster_for_team(_resolved_ta)
-        _tb_roster = db_manager.get_roster_for_team(_resolved_tb)
-        if _ta_roster or _tb_roster:
-            print(f"  Roster source: explicit team names -> DB")
+    # Path 1: C2 dynamic lineup tables
+    if _dyn_roster is not None:
+        _bundle = _dyn_roster.roster_identity_bundle_from_stem(video_path.stem)
+        if _bundle:
+            print(f"  Roster source: dynamic lineup (C2) for stem '{video_path.stem}'")
             identity_manager = PlayerIdentityManager(
+                roster_bundle=_bundle,
+                match_id=_match_id,
                 db_manager=db_manager,
-                team_a_name=_resolved_ta,
-                team_b_name=_resolved_tb,
-                team_a_color=_team_colors_cfg.get(_resolved_ta),
-                team_b_color=_team_colors_cfg.get(_resolved_tb),
                 enable_ocr=True,
             )
 
-    # Path 2: Extract from video filename + DB
-    if identity_manager is None and db_manager:
-        _fn_ta, _fn_tb = extract_teams_from_filename(video_path.name, db_manager)
-        if _fn_ta and _fn_tb:
-            _ta_roster = db_manager.get_roster_for_team(_fn_ta)
-            _tb_roster = db_manager.get_roster_for_team(_fn_tb)
-            if _ta_roster or _tb_roster:
-                _resolved_ta, _resolved_tb = _fn_ta, _fn_tb
-                print(f"  Roster source: filename '{video_path.stem}' -> DB")
-                identity_manager = PlayerIdentityManager(
-                    db_manager=db_manager,
-                    team_a_name=_fn_ta,
-                    team_b_name=_fn_tb,
-                    team_a_color=_team_colors_cfg.get(_fn_ta),
-                    team_b_color=_team_colors_cfg.get(_fn_tb),
-                    enable_ocr=True,
-                )
-
-    # Path 3 & 4: Roster JSON file (with optional DB enhancement)
+    # Path 2: Legacy JSON fallback if DB lookup fails
     if identity_manager is None:
-        roster_path = find_roster(video_path.stem)
-        if roster_path and db_manager:
-            try:
-                with open(roster_path, 'r', encoding='utf-8') as _rf:
-                    _roster_data = json.load(_rf)
-                _ta = _roster_data.get('teams', {}).get('A', {})
-                _tb = _roster_data.get('teams', {}).get('B', {})
-                _ta_name = _ta.get('name')
-                _tb_name = _tb.get('name')
-                if _ta_name and _tb_name:
-                    _ta_roster = db_manager.get_roster_for_team(_ta_name)
-                    _tb_roster = db_manager.get_roster_for_team(_tb_name)
-                    if _ta_roster or _tb_roster:
-                        _resolved_ta, _resolved_tb = _ta_name, _tb_name
-                        print(f"  Roster source: {roster_path.name} -> DB")
-                        identity_manager = PlayerIdentityManager(
-                            db_manager=db_manager,
-                            team_a_name=_ta_name,
-                            team_b_name=_tb_name,
-                            team_a_color=_ta.get('jersey_color') or _team_colors_cfg.get(_ta_name),
-                            team_b_color=_tb.get('jersey_color') or _team_colors_cfg.get(_tb_name),
-                            enable_ocr=True,
-                        )
-            except Exception:
-                pass
+        roster_path = ROOT / "rosters" / f"{video_path.stem}.json"
+        if not roster_path.exists():
+            roster_path = ROOT / "rosters" / f"{video_path.stem.replace('_1st_half', '').replace('_2nd_half', '')}.json"
+        
+        if roster_path.exists():
+            print(f"  Roster source: fallback to legacy JSON ({roster_path.name})")
+            identity_manager = PlayerIdentityManager(
+                roster_path=roster_path,
+                match_id=_match_id,
+                db_manager=db_manager,
+                enable_ocr=True,
+            )
 
-        if identity_manager is None:
-            if roster_path:
-                print(f"  Roster source: {roster_path.name} (JSON only)")
-            else:
-                print(f"  Roster source: none (color clustering + OCR only)")
-            identity_manager = PlayerIdentityManager(roster_path=roster_path, enable_ocr=True)
+    # Path 3: No roster fallback
+    if identity_manager is None:
+        print(f"  Roster source: none (color clustering + OCR only)")
+        identity_manager = PlayerIdentityManager(
+            match_id=_match_id,
+            db_manager=db_manager,
+            enable_ocr=True,
+        )
     
     # Color ball detector
     color_ball_detector = ColorBallDetector()
@@ -1536,7 +1494,7 @@ def main():
     parser.add_argument('--chunk-size', type=float, default=5.0,
                         help='Chunk size in minutes for long video processing (0 = no chunking)')
     parser.add_argument('--memory-limit', type=float, default=80.0,
-                        help='Warn if memory usage exceeds this % of system RAM')
+                        help='Warn if memory usage exceeds this %% of system RAM')
 
     args = parser.parse_args()
     

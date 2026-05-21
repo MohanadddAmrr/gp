@@ -25,8 +25,6 @@ def main():
 
     total = 0
     for f in files:
-        if f.name == "test.json":
-            continue
         n = db.seed_rosters_from_json(f)
         total += n
         print(f"  {f.name}: {n} new profiles")
