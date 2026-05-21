@@ -1,0 +1,31 @@
+name: prototype_review
+description: Demo scenario for prototype review meeting
+
+steps:
+  - kind: ensure_processed
+    video: demo/input_videos/sample_match.mp4
+    note: "Ensure demo video is processed"
+
+  - kind: pause
+    seconds: 0
+    note: "Take a moment to review the input video"
+
+  - kind: open_dashboard
+    tab: model_comparison
+    note: "Walk through the 5-model performance comparison"
+
+  - kind: open_dashboard
+    tab: accuracy_report
+    note: "Review accuracy metrics and precision/recall"
+
+  - kind: generate_pdf
+    video_dir: demo/demo_outputs/sample_match
+    note: "Generate comprehensive PDF report"
+
+  - kind: pause
+    seconds: 0
+    note: "Review the generated PDF report. Q&A here"
+
+  - kind: open_dashboard
+    tab: highlights
+    note: "Final: Review extracted highlights and key moments"
