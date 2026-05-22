@@ -1139,10 +1139,11 @@ st.markdown(f"""
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([
     "Overview", "Shooting", "Passing", "Physical", "Tactical",
     "xG & Analytics", "Heatmaps", "Highlights", "Database", "Settings",
-    "AI Recommendations", "Player Performance", "Match Comparison"
+    "AI Recommendations", "Player Performance", "Match Comparison",
+    "🌐 Live Match Data"
 ])
 
 # ============================================================
@@ -2668,432 +2669,100 @@ with tab10:
 
 with tab11:
     try:
-        st.markdown('<div class="section-header" style="color: #cbd5e1 !important; font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #DA291C; display: flex; align-items: center; gap: 10px;">AI Tactical Recommendations</div>', unsafe_allow_html=True)
-        st.caption("Intelligent tactical suggestions based on video analysis data")
+        from services.recommendation_engine import TacticalRecommendationEngine
 
-        ai_recommendations = metrics.get("ai_recommendations", [])
+        st.markdown('<div class="section-header" style="color: #cbd5e1 !important; font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #DA291C; display: flex; align-items: center; gap: 10px;">🤖 AI Tactical Recommendations</div>', unsafe_allow_html=True)
+        st.caption("Multi-signal analysis — each recommendation is backed by 3+ match statistics, not guesswork.")
 
-        # Get match-specific context for recommendations
-        match_duration = metrics.get('duration_minutes', 90)
-        possession_data = metrics.get('possession', {})
-        pass_data = metrics.get('pass_detection', {})
-        shot_data = metrics.get('shot_detection', {})
-        tactical_data = metrics.get('tactical_analysis', {})
+        # ── Run the engine ───────────────────────────────────────────────
+        _engine = TacticalRecommendationEngine()
+        _recs   = _engine.analyze(metrics, team_a=team_a, team_b=team_b)
 
-        # Generate dynamic match-specific recommendations based on actual match patterns
-        team_a_poss = possession_data.get('team_possession_percentage', {}).get('A', 50)
-        team_b_poss = possession_data.get('team_possession_percentage', {}).get('B', 50)
-        total_passes = pass_data.get('total_passes', 0)
-        pass_accuracy = pass_data.get('pass_accuracy', 75)
-        total_shots = shot_data.get('total_shots', 0)
-        shots_team_a = shot_data.get('team_shots', {}).get('A', 0)
-        shots_team_b = shot_data.get('team_shots', {}).get('B', 0)
-        pressing_data = tactical_data.get('pressing_intensity', {})
-        pressing_a = pressing_data.get('A', 0)
-        pressing_b = pressing_data.get('B', 0)
-        xg_data = metrics.get('xg_analysis', {})
-        team_xg = xg_data.get('team_comparison', {})
-        xg_a = team_xg.get('A', {}).get('xg', 0)
-        xg_b = team_xg.get('B', {}).get('xg', 0)
-        goals_a = team_xg.get('A', {}).get('goals', 0)
-        goals_b = team_xg.get('B', {}).get('goals', 0)
-        formations = tactical_data.get('current_formations', {})
-        formation_a = formations.get('A', '4-3-3')
-        formation_b = formations.get('B', '4-3-3')
-        dribbles = tactical_data.get('dribbles', {})
-        dribble_success = dribbles.get('success_rate', 50)
-        offsides = tactical_data.get('offsides', {})
-        confirmed_offsides = offsides.get('confirmed_offsides', 0)
+        # ── Summary bar ──────────────────────────────────────────────────
+        _high   = sum(1 for r in _recs if r.priority in ("CRITICAL", "HIGH"))
+        _avg_cf = sum(r.confidence for r in _recs) / len(_recs) if _recs else 0
 
-        # Get player tracks for additional analysis
-        tracks = metrics.get('tracks', [])
-        actual_tracks = [t for t in tracks if t.get('team') in ['A', 'B']]
-        team_a_tracks = [t for t in actual_tracks if t.get('team') == 'A']
-        team_b_tracks = [t for t in actual_tracks if t.get('team') == 'B']
-
-        # Calculate team-specific metrics
-        avg_speed_a = np.mean([t.get('avg_speed_mps', 0) for t in team_a_tracks]) if team_a_tracks else 0
-        avg_speed_b = np.mean([t.get('avg_speed_mps', 0) for t in team_b_tracks]) if team_b_tracks else 0
-        total_distance_a = sum(t.get('total_distance_m', 0) for t in team_a_tracks)
-        total_distance_b = sum(t.get('total_distance_m', 0) for t in team_b_tracks)
-
-        match_specific_recs = []
-
-        # Dynamic recommendation based on possession imbalance
-        poss_diff = abs(team_a_poss - team_b_poss)
-        if poss_diff > 15:
-            dominant_team = team_a if team_a_poss > team_b_poss else team_b
-            trailing_team = team_b if team_a_poss > team_b_poss else team_a
-            dominant_poss = max(team_a_poss, team_b_poss)
-            trailing_poss = min(team_a_poss, team_b_poss)
-
-            # For trailing team: improve possession
-            match_specific_recs.append({
-                'id': f'REC-POSS-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'HIGH' if poss_diff > 20 else 'MEDIUM',
-                'category': 'possession',
-                'title': f'{trailing_team}: Improve Ball Retention',
-                'description': f'{trailing_team} has only {trailing_poss:.1f}% possession vs {dominant_poss:.1f}% for {dominant_team}. Focus on shorter passing chains and better positional support.',
-                'reasoning': f'Large possession gap ({poss_diff:.1f}%) indicates {trailing_team} is struggling to control the game tempo.',
-                'expected_outcome': f'Reduce possession gap to under 10% within 15 minutes',
-                'confidence_score': min(0.9, 0.7 + poss_diff / 100),
-                'target_team': 'B' if team_a_poss > team_b_poss else 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Dynamic recommendation based on xG efficiency
-        if xg_a > 0 and goals_a < xg_a * 0.8:
-            underperforming = team_a
-            xg_diff = xg_a - goals_a
-            match_specific_recs.append({
-                'id': f'REC-XG-A-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'HIGH' if xg_diff > 1.0 else 'MEDIUM',
-                'category': 'attacking',
-                'title': f'{underperforming}: Improve Finishing',
-                'description': f'{underperforming} has {xg_a:.2f} xG but only {goals_a} goals. Working on shot quality and composure in front of goal.',
-                'reasoning': f'Underperforming xG by {xg_diff:.2f} indicates poor finishing or strong opponent goalkeeping.',
-                'expected_outcome': 'Convert high-quality chances more consistently',
-                'confidence_score': min(0.88, 0.6 + xg_diff / 3),
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'medium'
-            })
-
-        if xg_b > 0 and goals_b < xg_b * 0.8:
-            underperforming = team_b
-            xg_diff = xg_b - goals_b
-            match_specific_recs.append({
-                'id': f'REC-XG-B-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'HIGH' if xg_diff > 1.0 else 'MEDIUM',
-                'category': 'attacking',
-                'title': f'{underperforming}: Improve Finishing',
-                'description': f'{underperforming} has {xg_b:.2f} xG but only {goals_b} goals. Working on shot quality and composure in front of goal.',
-                'reasoning': f'Underperforming xG by {xg_diff:.2f} indicates poor finishing or strong opponent goalkeeping.',
-                'expected_outcome': 'Convert high-quality chances more consistently',
-                'confidence_score': min(0.88, 0.6 + xg_diff / 3),
-                'target_team': 'B',
-                'actionable': True,
-                'risk_level': 'medium'
-            })
-
-        # Dynamic recommendation based on pressing intensity comparison
-        press_diff = abs(pressing_a - pressing_b)
-        if press_diff > 20:
-            high_press_team = team_a if pressing_a > pressing_b else team_b
-            low_press_team = team_b if pressing_a > pressing_b else team_b
-            low_press_value = min(pressing_a, pressing_b)
-
-            match_specific_recs.append({
-                'id': f'REC-PRESS-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'pressing',
-                'title': f'{low_press_team}: Adjust Pressing Strategy',
-                'description': f'{low_press_team} pressing intensity ({low_press_value:.1f}) is significantly lower than {high_press_team}. Consider more aggressive counter-pressing or deeper defensive block.',
-                'reasoning': f'Pressing differential of {press_diff:.1f} points creates tactical imbalance.',
-                'expected_outcome': 'Better control of space and reduced opponent time on ball',
-                'confidence_score': min(0.82, 0.65 + press_diff / 100),
-                'target_team': 'B' if pressing_a > pressing_b else 'A',
-                'actionable': True,
-                'risk_level': 'medium'
-            })
-
-        # Dynamic recommendation based on shot creation disparity
-        if total_shots > 0:
-            shot_ratio = max(shots_team_a, shots_team_b) / max(total_shots * 0.5, 1)
-            if shot_ratio > 0.7:
-                dominant_shots = team_a if shots_team_a > shots_team_b else team_b
-                trailing_shots = team_b if shots_team_a > shots_team_b else team_a
-
-                match_specific_recs.append({
-                    'id': f'REC-SHOTS-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'HIGH',
-                    'category': 'attacking',
-                    'title': f'{trailing_shots}: Create More Goal Threats',
-                    'description': f'{trailing_shots} is being outshot significantly. Need to improve final third entries and shot creation through wider attacking patterns.',
-                    'reasoning': f'Limited shot production indicates struggles in penetrating opponent defense.',
-                    'expected_outcome': 'Generate 2-3 additional shots per half',
-                    'confidence_score': 0.80,
-                    'target_team': 'B' if shots_team_a > shots_team_b else 'A',
-                    'actionable': True,
-                    'risk_level': 'medium'
-                })
-
-        # Dynamic recommendation based on pass accuracy patterns
-        team_passes = pass_data.get('team_passes', {})
-        team_a_pass_data = team_passes.get('A', {}) if isinstance(team_passes.get('A'), dict) else {'accuracy': 75}
-        team_b_pass_data = team_passes.get('B', {}) if isinstance(team_passes.get('B'), dict) else {'accuracy': 75}
-        pass_acc_a = team_a_pass_data.get('accuracy', 75) if isinstance(team_a_pass_data, dict) else 75
-        pass_acc_b = team_b_pass_data.get('accuracy', 75) if isinstance(team_b_pass_data, dict) else 75
-
-        if pass_acc_a < 70:
-            match_specific_recs.append({
-                'id': f'REC-PASS-A-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'passing',
-                'title': f'{team_a}: Improve Passing Accuracy',
-                'description': f'{team_a} pass accuracy is {pass_acc_a:.1f}%, below optimal. Focus on simpler passing options and better body positioning when receiving.',
-                'reasoning': f'Low pass accuracy creates turnovers and disrupts attacking rhythm.',
-                'expected_outcome': 'Increase pass accuracy to 75%+ and maintain longer possession sequences',
-                'confidence_score': 0.78,
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        if pass_acc_b < 70:
-            match_specific_recs.append({
-                'id': f'REC-PASS-B-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'passing',
-                'title': f'{team_b}: Improve Passing Accuracy',
-                'description': f'{team_b} pass accuracy is {pass_acc_b:.1f}%, below optimal. Focus on simpler passing options and better body positioning when receiving.',
-                'reasoning': f'Low pass accuracy creates turnovers and disrupts attacking rhythm.',
-                'expected_outcome': 'Increase pass accuracy to 75%+ and maintain longer possession sequences',
-                'confidence_score': 0.78,
-                'target_team': 'B',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Dynamic recommendation based on formation analysis
-        if formation_a != formation_b:
-            if '3-' in formation_a and '4-' in formation_b:
-                match_specific_recs.append({
-                    'id': f'REC-FORM-A-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'MEDIUM',
-                    'category': 'formation',
-                    'title': f'{team_a}: Exploit Wide Areas',
-                    'description': f'{team_a} is playing with 3 defenders vs {team_b}\'s 4. Use wing-backs to create overloads in wide positions.',
-                    'reasoning': f'3-back formation provides natural width advantages against 4-back systems.',
-                    'expected_outcome': 'Create 2v1 situations on the flanks and deliver dangerous crosses',
-                    'confidence_score': 0.82,
-                    'target_team': 'A',
-                    'actionable': True,
-                    'risk_level': 'low'
-                })
-            elif '4-' in formation_a and '3-' in formation_b:
-                match_specific_recs.append({
-                    'id': f'REC-FORM-B-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'MEDIUM',
-                    'category': 'formation',
-                    'title': f'{team_b}: Exploit Wide Areas',
-                    'description': f'{team_b} is playing with 3 defenders vs {team_a}\'s 4. Use wing-backs to create overloads in wide positions.',
-                    'reasoning': f'3-back formation provides natural width advantages against 4-back systems.',
-                    'expected_outcome': 'Create 2v1 situations on the flanks and deliver dangerous crosses',
-                    'confidence_score': 0.82,
-                    'target_team': 'B',
-                    'actionable': True,
-                    'risk_level': 'low'
-                })
-
-        # Dynamic recommendation based on offside patterns
-        if confirmed_offsides > 3:
-            match_specific_recs.append({
-                'id': f'REC-OFFSIDE-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'attacking',
-                'title': 'Adjust Timing of Runs',
-                'description': f'{confirmed_offsides} offsides recorded. Strikers need to hold their runs slightly longer to stay onside.',
-                'reasoning': f'High offside count indicates poor timing between passers and runners.',
-                'expected_outcome': 'Reduce offsides by 50% while maintaining attacking threat',
-                'confidence_score': 0.75,
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Dynamic recommendation based on physical metrics
-        if avg_speed_a > 0 and avg_speed_b > 0:
-            speed_diff = abs(avg_speed_a - avg_speed_b)
-            if speed_diff > 1.0:
-                faster_team = team_a if avg_speed_a > avg_speed_b else team_b
-                match_specific_recs.append({
-                    'id': f'REC-PHYS-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'LOW',
-                    'category': 'physical',
-                    'title': f'{faster_team}: Leverage Speed Advantage',
-                    'description': f'{faster_team} is showing higher average speed. Use quick transitions and direct running to exploit this advantage.',
-                    'reasoning': f'Speed differential of {speed_diff:.2f} m/s can be exploited in open play.',
-                    'expected_outcome': 'Create more chances through quick breaks and fast combinations',
-                    'confidence_score': 0.70,
-                    'target_team': 'A' if avg_speed_a > avg_speed_b else 'B',
-                    'actionable': True,
-                    'risk_level': 'low'
-                })
-
-        # Dynamic recommendation based on dribble success
-        if dribble_success < 40 and dribbles.get('total_dribbles', 0) > 5:
-            match_specific_recs.append({
-                'id': f'REC-DRIBBLE-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'attacking',
-                'title': 'Reduce Risky Dribbles',
-                'description': f'Dribble success rate is only {dribble_success:.1f}%. Consider quicker passing combinations instead of individual runs.',
-                'reasoning': f'Low dribble success indicates poor decision-making in 1v1 situations.',
-                'expected_outcome': 'Increase possession retention and reduce turnovers in dangerous areas',
-                'confidence_score': 0.76,
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Add match-specific recommendations to the list
-        ai_recommendations = match_specific_recs + ai_recommendations
-
-        # If still no recommendations, add a contextual default
-        if len(ai_recommendations) == 0:
-            ai_recommendations.append({
-                'id': f'REC-DEFAULT-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'INFO',
-                'category': 'general',
-                'title': 'Match Analysis In Progress',
-                'description': 'Continue monitoring match patterns. Recommendations will appear as more data is collected.',
-                'reasoning': 'Insufficient data for specific tactical recommendations at this time.',
-                'expected_outcome': 'More targeted recommendations as match develops',
-                'confidence_score': 0.50,
-                'target_team': 'A',
-                'actionable': False,
-                'risk_level': 'low'
-            })
-
-        # Filter and deduplicate
-        filtered_recs = []
-        seen_categories = set()
-        seen_titles = set()
-
-        for rec in ai_recommendations:
-            category = rec.get('category', 'General')
-            title = rec.get('title', '')
-            unique_key = f"{category}:{title}"
-
-            if unique_key in seen_titles:
-                continue
-            seen_titles.add(unique_key)
-
-            if category == 'opponent_exploit' and 'Attack' in title and 'zone' not in seen_categories:
-                seen_categories.add('zone')
-                if not any(r.get('title') == 'Exploit Multiple Weak Zones' for r in filtered_recs):
-                    filtered_recs.append({
-                        'id': 'REC-ZONE-SUMMARY',
-                        'timestamp': rec.get('timestamp', 0),
-                        'priority': 'MEDIUM',
-                        'category': 'opponent_exploit',
-                        'title': 'Exploit Multiple Weak Zones',
-                        'description': 'Opponent shows low control in several zones. Consider rotating attacks between different defensive and midfield areas.',
-                        'reasoning': 'Analysis shows opponent vulnerability across multiple zones.',
-                        'expected_outcome': 'Create high-quality chances by attacking under-defended areas',
-                        'confidence_score': 0.75,
-                        'target_team': rec.get('target_team', 'A'),
-                        'actionable': True,
-                        'risk_level': 'low'
-                    })
-            else:
-                filtered_recs.append(rec)
-
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">Total</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #f1f5f9;">{len(filtered_recs)}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">Total</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="card-container" style="text-align:center;padding:20px;">
+                <div style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">Recommendations</div>
+                <div style="font-size:2rem;font-weight:700;color:#f1f5f9;">{len(_recs)}</div>
+            </div>""", unsafe_allow_html=True)
         with col2:
-            high_priority = len([r for r in filtered_recs if r.get('priority') in ['CRITICAL', 'HIGH']])
             st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">High Priority</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #DA291C;">{high_priority}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">High Priority</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="card-container" style="text-align:center;padding:20px;">
+                <div style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">High Priority</div>
+                <div style="font-size:2rem;font-weight:700;color:#DA291C;">{_high}</div>
+            </div>""", unsafe_allow_html=True)
         with col3:
-            actionable = len([r for r in filtered_recs if r.get('actionable', True)])
             st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">Actionable</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #34d399;">{actionable}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">Actionable</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col4:
-            avg_confidence = np.mean([r.get('confidence_score', 0.5) for r in filtered_recs]) if filtered_recs else 0
-            st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">Avg Confidence</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #fbbf24;">{avg_confidence:.0%}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">Avg Confidence</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="card-container" style="text-align:center;padding:20px;">
+                <div style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">Avg Confidence</div>
+                <div style="font-size:2rem;font-weight:700;color:#fbbf24;">{_avg_cf:.0%}</div>
+            </div>""", unsafe_allow_html=True)
 
-        # Display Recommendations
-        st.markdown('<div style="height: 24px;"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Top Recommendations</div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
 
-        if filtered_recs:
-            priority_order = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'INFO': 1}
-            sorted_recs = sorted(filtered_recs, 
-                               key=lambda x: priority_order.get(x.get('priority', 'LOW'), 0), 
-                               reverse=True)
+        # ── Recommendation cards ─────────────────────────────────────────
+        _priority_color = {
+            "CRITICAL": "#fb7185",
+            "HIGH":     "#fbbf24",
+            "MEDIUM":   "#60a5fa",
+            "LOW":      "#34d399",
+        }
+        _category_icon = {
+            "attacking":      "⚽",
+            "defensive":      "🛡️",
+            "transitions":    "⚡",
+            "opponent_exploit": "🔍",
+            "formation":      "📐",
+            "physical":       "💪",
+            "possession":     "🔄",
+        }
 
-            for rec in sorted_recs[:10]:
-                priority = rec.get('priority', 'LOW')
-                category = rec.get('category', 'General')
-                title = rec.get('title', rec.get('recommendation', 'No title'))
-                description = rec.get('description', rec.get('issue', ''))
-                confidence = rec.get('confidence', rec.get('confidence_score', 0.5))
-                reasoning = rec.get('reasoning', '')
-                expected_outcome = rec.get('expected_outcome', '')
-
-                priority_colors = {
-                    'CRITICAL': '#fb7185',
-                    'HIGH': '#fbbf24',
-                    'MEDIUM': '#60a5fa',
-                    'LOW': '#34d399',
-                    'INFO': '#6b7280'
-                }
-                color = priority_colors.get(priority, '#6b7280')
-
+        if _recs:
+            for _r in _recs:
+                _color = _priority_color.get(_r.priority, "#6b7280")
+                _icon  = _category_icon.get(_r.category, "🎯")
+                _steps_html = "".join(
+                    f'<li style="margin-bottom:4px;color:#cbd5e1;">{s}</li>'
+                    for s in _r.action_steps
+                )
+                _stats_html = " &nbsp;|&nbsp; ".join(
+                    f'<span style="color:#94a3b8;">{k}:</span> '
+                    f'<span style="color:#f1f5f9;font-weight:600;">{v}</span>'
+                    for k, v in _r.stats_used.items()
+                )
                 st.markdown(f"""
-                <div class="recommendation-card" style="border-left-color: {color};">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                        <h4 style="margin: 0; color: #f1f5f9; font-size: 1.1rem;">{title}</h4>
-                        <span style="background: {color}; color: white; padding: 4px 14px; border-radius: 12px; font-size: 0.8rem; font-weight: 500;">
-                            {priority}
+                <div class="recommendation-card" style="border-left:4px solid {_color};margin-bottom:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                        <h4 style="margin:0;color:#f1f5f9;font-size:1.05rem;">{_icon} {_r.title}</h4>
+                        <span style="background:{_color};color:#0f172a;padding:3px 12px;border-radius:10px;
+                                     font-size:0.78rem;font-weight:700;white-space:nowrap;margin-left:12px;">
+                            {_r.priority}
                         </span>
                     </div>
-                    <p style="color: #cbd5e1; margin: 8px 0; line-height: 1.6;">{description}</p>
-                    {f'<p style="color: #a78bfa; margin: 6px 0; font-size: 0.9rem;"><strong>Reasoning:</strong> {reasoning}</p>' if reasoning else ''}
-                    {f'<p style="color: #34d399; margin: 6px 0; font-size: 0.9rem;"><strong>Expected Outcome:</strong> {expected_outcome}</p>' if expected_outcome else ''}
-                    <div style="display: flex; gap: 20px; margin-top: 12px; font-size: 0.85rem;">
-                        <span style="color: #a78bfa;">{category}</span>
-                        <span style="color: #34d399;">Confidence: {confidence:.0%}</span>
+                    <p style="color:#e2e8f0;margin:0 0 8px;line-height:1.65;">{_r.description}</p>
+                    <p style="color:#a78bfa;margin:0 0 10px;font-size:0.88rem;">
+                        <strong>Why:</strong> {_r.reasoning}
+                    </p>
+                    <details>
+                        <summary style="color:#38bdf8;cursor:pointer;font-size:0.88rem;
+                                        font-weight:600;margin-bottom:6px;">
+                            📋 Coaching instructions
+                        </summary>
+                        <ol style="margin:8px 0 0 16px;padding:0;">{_steps_html}</ol>
+                    </details>
+                    <div style="margin-top:10px;font-size:0.8rem;border-top:1px solid #1e293b;padding-top:8px;">
+                        {_stats_html}
+                        &nbsp;&nbsp;
+                        <span style="color:#34d399;">confidence {_r.confidence:.0%}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div class="empty-state">
-                <h3 style="color: #f1f5f9; margin-bottom: 8px;">No AI Recommendations</h3>
-                <p style="color: #cbd5e1;">Process a video through the analysis pipeline to generate tactical suggestions.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info("No significant patterns detected yet. Process a full match video to generate recommendations.")
 
     except Exception as e:
         _tab_error_boundary("AI Recommendations", e)
@@ -3584,6 +3253,17 @@ with tab13:
 
     except Exception as e:
         _tab_error_boundary("Match Comparison", e)
+
+# ============================================================
+# ============================================================
+# TAB 14: LIVE MATCH DATA (Owner: Ahmed Khaled — Member E)
+# ============================================================
+with tab14:
+    try:
+        from demo.dashboard_pages.live_match_data import render as render_live
+        render_live()
+    except Exception as e:
+        _tab_error_boundary("Live Match Data", e)
 
 # ============================================================
 # FOOTER

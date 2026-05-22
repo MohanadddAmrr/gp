@@ -1,0 +1,23 @@
+[
+  {
+    "label": "liverpoolvscity",
+    "home_team": "Liverpool FC",
+    "away_team": "Manchester City FC",
+    "found_in_api": true,
+    "output_file": "demo_outputs\\live_sync\\liverpoolvscity_live.json"
+  },
+  {
+    "label": "liverpoolvsbournemouth",
+    "home_team": "Liverpool FC",
+    "away_team": "AFC Bournemouth",
+    "found_in_api": true,
+    "output_file": "demo_outputs\\live_sync\\liverpoolvsbournemouth_live.json"
+  },
+  {
+    "label": "arsenalvsfulham",
+    "home_team": "Arsenal FC",
+    "away_team": "Fulham FC",
+    "found_in_api": true,
+    "output_file": "demo_outputs\\live_sync\\arsenalvsfulham_live.json"
+  }
+]
