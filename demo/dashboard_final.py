@@ -64,6 +64,15 @@ from services.pitch_transform import PitchTransform
 from services.ball_tracker import BallTracker
 from services.event_detector import EventDetector
 
+# --- Dashboard runtime defaults ---
+PLOTLY_PALETTE = ["#DA291C", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa"]
+
+# Ensure session state keys exist (helps when reloading in Streamlit)
+if 'selected_video' not in st.session_state:
+    st.session_state['selected_video'] = None
+if 'selected_matches' not in st.session_state:
+    st.session_state['selected_matches'] = []
+
 # ============================================================
 # FOOTBALL-DATA.ORG API INTEGRATION
 # ============================================================
@@ -669,8 +678,12 @@ def load_metrics(video_dir: Path) -> Dict:
     """Load metrics from video output directory."""
     metrics_file = video_dir / "metrics.json"
     if metrics_file.exists():
-        with open(metrics_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(metrics_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return {}
     return {}
 
 def get_video_directories():
@@ -679,8 +692,97 @@ def get_video_directories():
     if not output_base.exists():
         return []
     
-    dirs = [d for d in output_base.iterdir() if d.is_dir()]
+    dirs = []
+    for d in output_base.iterdir():
+        if not d.is_dir():
+            continue
+        try:
+            d.stat()
+            dirs.append(d)
+        except OSError:
+            continue
     return sorted(dirs, key=lambda x: x.stat().st_mtime, reverse=True)
+
+def _safe_number(value: Any, default: float = 0.0) -> float:
+    """Convert common metric values to a float safely."""
+    try:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.strip().replace('%', '')
+            return float(cleaned) if cleaned else default
+    except (TypeError, ValueError):
+        return default
+    return default
+
+def _format_comparison_value(value: Any) -> Any:
+    """Format comparison table values without losing non-numeric labels."""
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        return round(float(value), 1)
+    return value if value not in [None, ""] else "N/A"
+
+def _extract_total_goals(match_metrics: Dict) -> float:
+    """Return the most reliable total-goals value available for a match."""
+    score = match_metrics.get('score', {}) if isinstance(match_metrics.get('score'), dict) else {}
+    score_goals = _safe_number(score.get('A')) + _safe_number(score.get('B'))
+    if score_goals > 0:
+        return score_goals
+
+    shot_stats = match_metrics.get('shot_detection', {}) if isinstance(match_metrics.get('shot_detection'), dict) else {}
+    if _safe_number(shot_stats.get('goals')) > 0:
+        return _safe_number(shot_stats.get('goals'))
+
+    xg_stats = match_metrics.get('xg_analysis', {}) if isinstance(match_metrics.get('xg_analysis'), dict) else {}
+    return _safe_number(xg_stats.get('actual_goals'))
+
+def _extract_total_passes(match_metrics: Dict) -> float:
+    """Return a stable total-pass count for a match."""
+    pass_stats = match_metrics.get('pass_detection', {}) if isinstance(match_metrics.get('pass_detection'), dict) else {}
+    total_passes = _safe_number(pass_stats.get('total_passes'))
+    if total_passes > 0:
+        return total_passes
+    team_passes = pass_stats.get('team_passes', {}) if isinstance(pass_stats.get('team_passes'), dict) else {}
+    return _safe_number(team_passes.get('A')) + _safe_number(team_passes.get('B'))
+
+def _extract_completed_passes(match_metrics: Dict) -> float:
+    """Return completed passes or derive them from accuracy when needed."""
+    pass_stats = match_metrics.get('pass_detection', {}) if isinstance(match_metrics.get('pass_detection'), dict) else {}
+    completed = _safe_number(pass_stats.get('completed_passes'))
+    if completed > 0:
+        return completed
+
+    total_passes = _extract_total_passes(match_metrics)
+    accuracy = _safe_number(pass_stats.get('pass_accuracy'))
+    return round(total_passes * accuracy / 100.0) if total_passes > 0 and accuracy > 0 else 0.0
+
+def _extract_intercepted_passes(match_metrics: Dict) -> float:
+    """Return intercepted passes when the field is present."""
+    pass_stats = match_metrics.get('pass_detection', {}) if isinstance(match_metrics.get('pass_detection'), dict) else {}
+    return _safe_number(pass_stats.get('intercepted_passes'))
+
+def _extract_total_shots(match_metrics: Dict) -> float:
+    """Return total shots for a match."""
+    shot_stats = match_metrics.get('shot_detection', {}) if isinstance(match_metrics.get('shot_detection'), dict) else {}
+    total_shots = _safe_number(shot_stats.get('total_shots'))
+    if total_shots > 0:
+        return total_shots
+    xg_stats = match_metrics.get('xg_analysis', {}) if isinstance(match_metrics.get('xg_analysis'), dict) else {}
+    return _safe_number(xg_stats.get('shots'))
+
+def _extract_total_xg(match_metrics: Dict) -> float:
+    """Return total xG for a match."""
+    xg_stats = match_metrics.get('xg_analysis', {}) if isinstance(match_metrics.get('xg_analysis'), dict) else {}
+    total_xg = _safe_number(xg_stats.get('total_xg'))
+    if total_xg > 0:
+        return total_xg
+    shot_stats = match_metrics.get('shot_detection', {}) if isinstance(match_metrics.get('shot_detection'), dict) else {}
+    return _safe_number(shot_stats.get('xg'))
 
 def format_duration(seconds: float) -> str:
     """Format duration in seconds to mm:ss."""
@@ -858,8 +960,12 @@ with st.sidebar:
         selected_video = st.selectbox(
             "Select Match",
             options=list(video_options.keys()),
-            index=0 if video_options else None
+            index=0 if video_options else None,
+            key="selectbox_match"
         )
+
+        # Persist selection in session_state so all tabs can read it
+        st.session_state['selected_video'] = selected_video
 
         if selected_video:
             sel = video_options[selected_video]
@@ -3075,12 +3181,18 @@ with tab13:
         if len(match_options) < 2:
             st.info("Need at least 2 processed matches for comparison. Run the pipeline on more videos first.")
         else:
+            # Use session_state so selection persists across reruns
+            default_matches = st.session_state.get('selected_matches') or list(match_options.keys())[:2]
             selected_matches = st.multiselect(
                 "Select matches to compare",
                 options=list(match_options.keys()),
-                default=list(match_options.keys())[:2],
-                max_selections=5
+                default=default_matches,
+                max_selections=5,
+                key='selected_matches_control'
             )
+
+            # Keep a copy in session_state for other tabs
+            st.session_state['selected_matches'] = selected_matches
 
             if len(selected_matches) < 2:
                 st.info("Select at least 2 matches to compare.")
@@ -3098,26 +3210,26 @@ with tab13:
 
                 table_rows = []
                 metric_defs = [
-                    ("Total Goals", lambda m: m.get('score', {}).get('A', 0) + m.get('score', {}).get('B', 0) if m.get('score') else m.get('xg_analysis', {}).get('actual_goals', 0)),
-                    ("Total Shots", lambda m: m.get('shot_detection', {}).get('total_shots', 0)),
-                    ("Shot Accuracy %", lambda m: f"{(m.get('shot_detection', {}).get('team_shots', {}).get('A', 0) + m.get('shot_detection', {}).get('team_shots', {}).get('B', 0)) and round(100 * m.get('xg_analysis', {}).get('conversion_rate', 0), 1) or 0}"),
-                    ("Total Passes", lambda m: m.get('pass_detection', {}).get('total_passes', 0)),
-                    ("Pass Completion %", lambda m: m.get('pass_detection', {}).get('pass_accuracy', 0)),
-                    ("Possession (Home)", lambda m: f"{m.get('possession', {}).get('team_possession_percentage', {}).get('A', 0):.1f}%"),
-                    ("Possession (Away)", lambda m: f"{m.get('possession', {}).get('team_possession_percentage', {}).get('B', 0):.1f}%"),
-                    ("Total Sprints", lambda m: m.get('sprint_detection', {}).get('total_sprints', 0)),
-                    ("xG Total", lambda m: m.get('xg_analysis', {}).get('total_xg', 0)),
-                    ("Formation (Home)", lambda m: m.get('tactical_analysis', {}).get('current_formations', {}).get('A', 'N/A')),
-                    ("Formation (Away)", lambda m: m.get('tactical_analysis', {}).get('current_formations', {}).get('B', 'N/A')),
-                    ("Duration (min)", lambda m: round(m.get('duration_minutes', 0), 1)),
+                    ("Total Goals", lambda m: _extract_total_goals(m)),
+                    ("Total Shots", lambda m: _extract_total_shots(m)),
+                    ("Shot Accuracy %", lambda m: (lambda mm: f"{round(100 * _safe_number(mm.get('xg_analysis', {}).get('conversion_rate')) ,1)}%" if mm.get('xg_analysis') else "N/A")(m)),
+                    ("Total Passes", lambda m: _extract_total_passes(m)),
+                    ("Pass Completion %", lambda m: (lambda mm: f"{_safe_number(mm.get('pass_detection', {}).get('pass_accuracy')):.1f}%" if mm.get('pass_detection') else "N/A")(m)),
+                    ("Possession (Home)", lambda m: (lambda mm: f"{_safe_number(mm.get('possession', {}).get('team_possession_percentage', {}).get('A')):.1f}%" if mm.get('possession') else "N/A")(m)),
+                    ("Possession (Away)", lambda m: (lambda mm: f"{_safe_number(mm.get('possession', {}).get('team_possession_percentage', {}).get('B')):.1f}%" if mm.get('possession') else "N/A")(m)),
+                    ("Total Sprints", lambda m: _safe_number(m.get('sprint_detection', {}).get('total_sprints'))),
+                    ("xG Total", lambda m: _extract_total_xg(m)),
+                    ("Formation (Home)", lambda m: (m.get('tactical_analysis', {}).get('current_formations', {}).get('A', 'N/A'))),
+                    ("Formation (Away)", lambda m: (m.get('tactical_analysis', {}).get('current_formations', {}).get('B', 'N/A'))),
+                    ("Duration (min)", lambda m: round(_safe_number(m.get('duration_minutes')), 1)),
                 ]
 
                 for metric_name, extractor in metric_defs:
                     row = {"Metric": metric_name}
                     for match_name in selected_matches:
                         try:
-                            val = extractor(comparison_data[match_name])
-                            row[match_name] = val if val is not None else "N/A"
+                            raw_val = extractor(comparison_data[match_name])
+                            row[match_name] = _format_comparison_value(raw_val)
                         except Exception:
                             row[match_name] = "N/A"
                     table_rows.append(row)
@@ -3130,7 +3242,7 @@ with tab13:
                 import plotly.graph_objects as go
                 from plotly.subplots import make_subplots
 
-                chart_colors = ["#DA291C", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa"]
+                chart_colors = PLOTLY_PALETTE
 
                 # Short labels for chart axes
                 short_labels = [name.replace(" vs ", "\nvs\n")[:20] for name in selected_matches]
@@ -3145,19 +3257,19 @@ with tab13:
                     shots_data.append(m.get('shot_detection', {}).get('total_shots', 0))
                     goals_data.append(m.get('xg_analysis', {}).get('actual_goals', 0))
 
-                fig_shots = go.Figure(data=[
-                    go.Bar(name='Shots', x=short_labels, y=shots_data,
-                           marker_color='#DA291C', marker_line_width=0),
-                    go.Bar(name='Goals', x=short_labels, y=goals_data,
-                           marker_color='#ff6b5a', marker_line_width=0)
-                ])
-                fig_shots.update_layout(**plotly_dark_layout(
-                    barmode='group',
-                    xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
-                    yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
-                    height=350
-                ))
-                st.plotly_chart(fig_shots, use_container_width=True)
+                with st.spinner("Rendering shots & goals chart..."):
+                    fig_shots = go.Figure()
+                    fig_shots.add_trace(go.Bar(name='Shots', x=short_labels, y=shots_data,
+                                               marker_color=chart_colors[0], marker_line_width=0))
+                    fig_shots.add_trace(go.Bar(name='Goals', x=short_labels, y=goals_data,
+                                               marker_color=chart_colors[1], marker_line_width=0))
+                    fig_shots.update_layout(**plotly_dark_layout(
+                        barmode='group',
+                        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
+                        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
+                        height=350
+                    ))
+                    st.plotly_chart(fig_shots, use_container_width=True)
 
                 # Grouped bar: Passes Completed vs Intercepted per match
                 st.markdown('<div class="section-header">Passing Comparison</div>', unsafe_allow_html=True)
@@ -3170,19 +3282,19 @@ with tab13:
                     completed_data.append(pd_stats.get('completed_passes', 0))
                     intercepted_data.append(pd_stats.get('intercepted_passes', 0))
 
-                fig_passes = go.Figure(data=[
-                    go.Bar(name='Completed', x=short_labels, y=completed_data,
-                           marker_color='#34d399', marker_line_width=0),
-                    go.Bar(name='Intercepted', x=short_labels, y=intercepted_data,
-                           marker_color='#fb7185', marker_line_width=0)
-                ])
-                fig_passes.update_layout(**plotly_dark_layout(
-                    barmode='group',
-                    xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
-                    yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
-                    height=350
-                ))
-                st.plotly_chart(fig_passes, use_container_width=True)
+                with st.spinner("Rendering passing comparison..."):
+                    fig_passes = go.Figure()
+                    fig_passes.add_trace(go.Bar(name='Completed', x=short_labels, y=completed_data,
+                                                 marker_color=chart_colors[2], marker_line_width=0))
+                    fig_passes.add_trace(go.Bar(name='Intercepted', x=short_labels, y=intercepted_data,
+                                                 marker_color=chart_colors[4], marker_line_width=0))
+                    fig_passes.update_layout(**plotly_dark_layout(
+                        barmode='group',
+                        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
+                        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
+                        height=350
+                    ))
+                    st.plotly_chart(fig_passes, use_container_width=True)
 
                 # Radar chart: normalized key stats
                 st.markdown('<div class="section-header">Performance Radar</div>', unsafe_allow_html=True)
