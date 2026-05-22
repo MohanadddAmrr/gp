@@ -1139,11 +1139,11 @@ st.markdown(f"""
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
     "Overview", "Shooting", "Passing", "Physical", "Tactical",
     "xG & Analytics", "Heatmaps", "Highlights", "Database", "Settings",
     "AI Recommendations", "Player Performance", "Match Comparison",
-    "🌐 Live Match Data"
+    "🌐 Live Match Data", "Generate Report"
 ])
 
 # ============================================================
@@ -3255,7 +3255,6 @@ with tab13:
         _tab_error_boundary("Match Comparison", e)
 
 # ============================================================
-# ============================================================
 # TAB 14: LIVE MATCH DATA (Owner: Ahmed Khaled — Member E)
 # ============================================================
 with tab14:
@@ -3264,6 +3263,16 @@ with tab14:
         render_live()
     except Exception as e:
         _tab_error_boundary("Live Match Data", e)
+
+# ============================================================
+# TAB 15: GENERATE REPORT (Owner: Youssef — Member F)
+# ============================================================
+with tab15:
+    try:
+        from demo.dashboard_pages.generate_report import render_generate_report
+        render_generate_report()
+    except Exception as e:
+        _tab_error_boundary("Generate Report", e)
 
 # ============================================================
 # FOOTER
