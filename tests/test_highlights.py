@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 import tempfile
 
-from services.highlights_generator import HighlightsGenerator, Highlight
+from services.highlights_generator_v2 import HighlightsGenerator, Highlight
 
 
 @pytest.fixture
