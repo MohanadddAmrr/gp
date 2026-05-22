@@ -86,3 +86,6 @@ feature_report.js
 .claude/
 .env
 cache/
+*.db
+*.onnx
+*.pt

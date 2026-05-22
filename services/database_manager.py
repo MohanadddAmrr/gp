@@ -30,7 +30,7 @@ def convert_numpy_types(obj):
     import numpy as np
     if isinstance(obj, dict):
         return {k: convert_numpy_types(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    elif isinstance(obj, (list, tuple, set)):
         return [convert_numpy_types(v) for v in obj]
     elif isinstance(obj, (np.integer, np.int64, np.int32)):
         return int(obj)
@@ -93,6 +93,54 @@ class DatabaseManager:
         with self._get_connection() as conn:
             # First, handle schema migrations for existing tables
             self._migrate_schema(conn)
+            
+            # STEP 3 Migration logic: check if teams table exists or if legacy roster_players is present.
+            cursor = conn.cursor()
+            
+            # Check if legacy roster_players table exists without team_id
+            cursor.execute("PRAGMA table_info(roster_players)")
+            cols = {row[1] for row in cursor.fetchall()}
+            if cols and 'team_id' not in cols:
+                print("  [Migration] Dropping legacy roster_players table to apply Sprint Blueprint schema...")
+                cursor.execute("DROP TABLE IF EXISTS roster_players")
+                cursor.execute("DROP TABLE IF EXISTS rosters")
+                cursor.execute("DROP TABLE IF EXISTS players_master")
+                
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='teams'")
+            if not cursor.fetchone():
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS teams (
+                    team_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    short_name TEXT,
+                    primary_color TEXT DEFAULT '#FFFFFF',
+                    secondary_color TEXT DEFAULT '#000000',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS roster_players (
+                    player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    jersey_number INTEGER,
+                    position TEXT,
+                    FOREIGN KEY (team_id) REFERENCES teams(team_id)
+                );
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS match_rosters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    match_id TEXT NOT NULL,
+                    home_team_id INTEGER,
+                    away_team_id INTEGER,
+                    FOREIGN KEY (home_team_id) REFERENCES teams(team_id),
+                    FOREIGN KEY (away_team_id) REFERENCES teams(team_id)
+                );
+                """)
+                print("  [Migration] Created teams, roster_players, and match_rosters tables.")
+
+
             # Then run the full schema (CREATE IF NOT EXISTS is safe)
             conn.executescript(SCHEMA_SQL)
         print(f"Database initialized: {self.db_path}")
@@ -1385,7 +1433,7 @@ class DatabaseManager:
                     event.get('velocity_mps', 0),
                     event.get('big_chance', False),
                     event.get('xg_value', 0),
-                    json.dumps(event.get('metadata', {}))
+                    json.dumps(convert_numpy_types(event.get('metadata', {})))
                 ))
     
     def get_xg_data_for_match(self, match_id: int) -> List[Dict]:
@@ -1477,7 +1525,7 @@ class DatabaseManager:
                     highlight.get('clip_end'),
                     highlight.get('xg_value', 0),
                     highlight.get('velocity', 0),
-                    json.dumps(highlight.get('metadata', {}))
+                    json.dumps(convert_numpy_types(highlight.get('metadata', {})))
                 ))
     
     def get_highlights_for_match(
@@ -1569,7 +1617,7 @@ class DatabaseManager:
                     pattern.get('pass_count', 0),
                     pattern.get('distance_covered', 0),
                     pattern.get('xg_generated', 0),
-                    json.dumps(pattern.get('players_involved', [])),
+                    json.dumps(convert_numpy_types(pattern.get('players_involved', []))),
                     pattern.get('description', '')
                 ))
     
@@ -1874,3 +1922,175 @@ class DatabaseManager:
                     data['metadata'] = json.loads(data['metadata'])
                 results.append(data)
             return results
+
+    # ============================================================
+    # ROSTER SYSTEM (Sprint Blueprint CRUD Methods)
+    # ============================================================
+    
+    def add_team(
+        self,
+        name: str,
+        short_name: Optional[str] = None,
+        primary_color: str = '#FFFFFF',
+        secondary_color: str = '#000000'
+    ) -> int:
+        """Add a new team or return existing team_id if name matches."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT team_id FROM teams WHERE name = ? LIMIT 1", (name,))
+            row = cursor.fetchone()
+            if row:
+                return row['team_id']
+            
+            cursor.execute("""
+                INSERT INTO teams (name, short_name, primary_color, secondary_color)
+                VALUES (?, ?, ?, ?)
+            """, (name, short_name, primary_color, secondary_color))
+            return cursor.lastrowid
+
+    def get_team(self, team_id: int) -> Optional[Dict]:
+        """Get team details by ID."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM teams WHERE team_id = ?", (team_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def list_teams(self) -> List[Dict]:
+        """List all teams."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM teams ORDER BY name")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def add_player(
+        self,
+        team_id: int,
+        name: str,
+        jersey_number: Optional[int] = None,
+        position: Optional[str] = None
+    ) -> int:
+        """Add a player to a team. Avoids duplicate player with same name in same team."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT player_id FROM roster_players 
+                WHERE team_id = ? AND name = ? LIMIT 1
+            """, (team_id, name))
+            row = cursor.fetchone()
+            if row:
+                pid = row['player_id']
+                cursor.execute("""
+                    UPDATE roster_players 
+                    SET jersey_number = COALESCE(?, jersey_number),
+                        position = COALESCE(?, position)
+                    WHERE player_id = ?
+                """, (jersey_number, position, pid))
+                return pid
+
+            cursor.execute("""
+                INSERT INTO roster_players (team_id, name, jersey_number, position)
+                VALUES (?, ?, ?, ?)
+            """, (team_id, name, jersey_number, position))
+            return cursor.lastrowid
+
+    def get_players_by_team(self, team_id: int) -> List[Dict]:
+        """Get all players for a specific team."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM roster_players WHERE team_id = ? ORDER BY jersey_number, name", (team_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_roster_lookup(self, team_id: int) -> Dict[int, str]:
+        """Get {jersey_number: player_name} lookup dict for a team."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT jersey_number, name FROM roster_players 
+                WHERE team_id = ? AND jersey_number IS NOT NULL
+            """, (team_id,))
+            return {row['jersey_number']: row['name'] for row in cursor.fetchall()}
+
+    def assign_roster_to_match(self, match_id: str, home_team_id: int, away_team_id: int):
+        """Assign home and away teams to a match."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM match_rosters WHERE match_id = ? LIMIT 1", (str(match_id),))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("""
+                    UPDATE match_rosters 
+                    SET home_team_id = ?, away_team_id = ? 
+                    WHERE id = ?
+                """, (home_team_id, away_team_id, row['id']))
+            else:
+                cursor.execute("""
+                    INSERT INTO match_rosters (match_id, home_team_id, away_team_id)
+                    VALUES (?, ?, ?)
+                """, (str(match_id), home_team_id, away_team_id))
+
+    def get_match_roster(self, match_id: str) -> Optional[Dict]:
+        """
+        Get complete roster details for a match.
+        Format: {
+            'home_team_id': ...,
+            'away_team_id': ...,
+            'home_team': {'team_id': ..., 'name': ..., 'players': {jersey: name, ...}},
+            'away_team': {'team_id': ..., 'name': ..., 'players': {jersey: name, ...}}
+        }
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT home_team_id, away_team_id FROM match_rosters WHERE match_id = ? LIMIT 1", (str(match_id),))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            home_id = row['home_team_id']
+            away_id = row['away_team_id']
+            
+            res = {
+                'home_team_id': home_id,
+                'away_team_id': away_id
+            }
+            for side_key, tid in [('home_team', home_id), ('away_team', away_id)]:
+                cursor.execute("SELECT * FROM teams WHERE team_id = ?", (tid,))
+                t_row = cursor.fetchone()
+                if t_row:
+                    t_dict = dict(t_row)
+                    cursor.execute("SELECT jersey_number, name FROM roster_players WHERE team_id = ? AND jersey_number IS NOT NULL", (tid,))
+                    players_dict = {str(p['jersey_number']): p['name'] for p in cursor.fetchall()}
+                    t_dict['players'] = players_dict
+                    res[side_key] = t_dict
+            return res
+
+    def delete_team(self, team_id: int):
+        """Delete a team and its players."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM roster_players WHERE team_id = ?", (team_id,))
+            cursor.execute("DELETE FROM match_rosters WHERE home_team_id = ? OR away_team_id = ?", (team_id, team_id))
+            cursor.execute("DELETE FROM teams WHERE team_id = ?", (team_id,))
+
+    def update_player(self, player_id: int, **fields):
+        """Update specific fields of a player dynamically."""
+        if not fields:
+            return
+        
+        valid_columns = {'name', 'jersey_number', 'position', 'team_id'}
+        update_cols = []
+        params = []
+        for k, v in fields.items():
+            if k in valid_columns:
+                update_cols.append(f"{k} = ?")
+                params.append(v)
+        
+        if not update_cols:
+            return
+            
+        params.append(player_id)
+        sql = f"UPDATE roster_players SET {', '.join(update_cols)} WHERE player_id = ?"
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, tuple(params))

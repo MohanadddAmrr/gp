@@ -54,7 +54,6 @@ pillow>=10.0.0
 
 sqlalchemy>=2.0.0
 alembic>=1.12.0
-sqlite3-python; python_version < '3.12'
 
 # =============================================================================
 # API & NETWORKING
@@ -176,7 +175,7 @@ pyobjc>=10.0; platform_system == 'Darwin'
 # =============================================================================
 # VERSION CONSTRAINTS NOTES
 # =============================================================================
-# 
+#
 # Core dependencies have minimum versions to ensure compatibility with
 # Python 3.8+ and modern hardware acceleration features.
 #

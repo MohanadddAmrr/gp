@@ -16,6 +16,11 @@ Tables:
 - player_profiles: Cross-match player profiles with face recognition
 """
 
+from __future__ import annotations
+
+import sqlite3
+from typing import Iterable, Set
+
 # SQL Schema for creating all tables
 SCHEMA_SQL = """
 -- ============================================================
@@ -84,6 +89,36 @@ CREATE TABLE IF NOT EXISTS player_profiles (
     weight_kg INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- ROSTER SYSTEM (Sprint Blueprint Specifications)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS teams (
+    team_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    short_name TEXT,
+    primary_color TEXT DEFAULT '#FFFFFF',
+    secondary_color TEXT DEFAULT '#000000',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS roster_players (
+    player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    jersey_number INTEGER,
+    position TEXT,
+    FOREIGN KEY (team_id) REFERENCES teams(team_id)
+);
+
+CREATE TABLE IF NOT EXISTS match_rosters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id TEXT NOT NULL,
+    home_team_id INTEGER,
+    away_team_id INTEGER,
+    FOREIGN KEY (home_team_id) REFERENCES teams(team_id),
+    FOREIGN KEY (away_team_id) REFERENCES teams(team_id)
 );
 
 -- ============================================================
@@ -293,6 +328,9 @@ CREATE INDEX IF NOT EXISTS idx_ball_tracking_frame ON ball_tracking(frame_number
 CREATE INDEX IF NOT EXISTS idx_stats_match ON player_stats(match_id);
 CREATE INDEX IF NOT EXISTS idx_stats_profile ON player_stats(profile_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_name ON player_profiles(name);
+CREATE INDEX IF NOT EXISTS idx_teams_name ON teams(name);
+CREATE INDEX IF NOT EXISTS idx_roster_players_team ON roster_players(team_id);
+CREATE INDEX IF NOT EXISTS idx_match_rosters_match ON match_rosters(match_id);
 
 -- ============================================================
 -- XG DATA TABLE (Expected Goals)
@@ -438,6 +476,161 @@ CREATE INDEX IF NOT EXISTS idx_opponent_name ON opponent_profiles(team_name);
 CREATE INDEX IF NOT EXISTS idx_networks_match ON passing_networks(match_id);
 CREATE INDEX IF NOT EXISTS idx_zone_control_match ON zone_control(match_id);
 """
+
+# ---------------------------------------------------------------------------
+# Task C1 — relational roster layer (7.3)
+#
+# Physical SQLite names `lineup_teams` / `lineup_players` match the spec’s
+# teams/players *semantics* while avoiding collisions with legacy SCHEMA_SQL
+# tables (`players` = per-match instances; ambiguous duplicate `teams` DDL).
+# ---------------------------------------------------------------------------
+
+LINEUP_TEAMS_TABLE = "lineup_teams"
+LINEUP_PLAYERS_TABLE = "lineup_players"
+MATCH_LINEUPS_TABLE = "match_lineups"
+
+
+def _sqlite_tables(conn: sqlite3.Connection) -> Set[str]:
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    return {row[0] for row in cur.fetchall()}
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> Set[str]:
+    allowed = {LINEUP_TEAMS_TABLE, LINEUP_PLAYERS_TABLE, MATCH_LINEUPS_TABLE, "matches"}
+    if table not in allowed:
+        raise ValueError(f"Unsupported table for PRAGMA: {table!r}")
+    cur = conn.cursor()
+    cur.execute(f'PRAGMA table_info("{table}")')
+    return {row[1] for row in cur.fetchall()}
+
+
+def _ensure_stub_matches(conn: sqlite3.Connection) -> None:
+    """If `matches` is missing, create a minimal table so match_lineups FKs apply (greenfield / tests)."""
+    if "matches" in _sqlite_tables(conn):
+        return
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE matches (
+            match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_path TEXT NOT NULL,
+            team_a TEXT NOT NULL,
+            team_b TEXT NOT NULL
+        )
+        """
+    )
+
+
+def alter_matches_lineup_columns(conn: sqlite3.Connection) -> int:
+    """
+    Add home_team_id / away_team_id to matches when missing (additive, idempotent).
+    Returns number of columns added.
+    """
+    if "matches" not in _sqlite_tables(conn):
+        return 0
+    if LINEUP_TEAMS_TABLE not in _sqlite_tables(conn):
+        return 0
+    cols = _table_columns(conn, "matches")
+    cur = conn.cursor()
+    added = 0
+    if "home_team_id" not in cols:
+        cur.execute(
+            f'ALTER TABLE matches ADD COLUMN home_team_id INTEGER REFERENCES "{LINEUP_TEAMS_TABLE}"(id)'
+        )
+        added += 1
+    if "away_team_id" not in cols:
+        cur.execute(
+            f'ALTER TABLE matches ADD COLUMN away_team_id INTEGER REFERENCES "{LINEUP_TEAMS_TABLE}"(id)'
+        )
+        added += 1
+    return added
+
+
+def create_schema(conn: sqlite3.Connection) -> None:
+    """
+    C1 canonical DDL: lineup_teams, lineup_players, match_lineups + helpful indexes,
+    and additive columns on matches (home_team_id, away_team_id).
+
+    Safe to call multiple times (IF NOT EXISTS / guarded ALTER).
+    Requires or creates a minimal `matches` table so match_lineups FK resolves.
+    """
+    cur = conn.cursor()
+    cur.execute("PRAGMA foreign_keys = ON")
+
+    _ensure_stub_matches(conn)
+
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS "{LINEUP_TEAMS_TABLE}" (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            short_code TEXT,
+            primary_color TEXT,
+            secondary_color TEXT
+        )
+        """
+    )
+    cur.execute(
+        f'CREATE UNIQUE INDEX IF NOT EXISTS ux_lineup_teams_name ON "{LINEUP_TEAMS_TABLE}"(name)'
+    )
+
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS "{LINEUP_PLAYERS_TABLE}" (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id INTEGER NOT NULL REFERENCES "{LINEUP_TEAMS_TABLE}"(id),
+            name TEXT NOT NULL,
+            jersey_number INTEGER,
+            position TEXT,
+            dob TEXT,
+            height_cm INTEGER,
+            weight_kg INTEGER,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
+    cur.execute(
+        f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_lineup_players_team_jersey
+        ON "{LINEUP_PLAYERS_TABLE}"(team_id, jersey_number)
+        """
+    )
+    cur.execute(
+        f'CREATE INDEX IF NOT EXISTS idx_lineup_players_team_id ON "{LINEUP_PLAYERS_TABLE}"(team_id)'
+    )
+
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS "{MATCH_LINEUPS_TABLE}" (
+            match_id INTEGER NOT NULL REFERENCES matches(match_id) ON DELETE CASCADE,
+            player_id INTEGER NOT NULL REFERENCES "{LINEUP_PLAYERS_TABLE}"(id) ON DELETE CASCADE,
+            position_in_lineup TEXT,
+            is_starter INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (match_id, player_id)
+        )
+        """
+    )
+    cur.execute(
+        f'CREATE INDEX IF NOT EXISTS idx_match_lineups_match_id ON "{MATCH_LINEUPS_TABLE}"(match_id)'
+    )
+    cur.execute(
+        f'CREATE INDEX IF NOT EXISTS idx_match_lineups_player_id ON "{MATCH_LINEUPS_TABLE}"(player_id)'
+    )
+
+    alter_matches_lineup_columns(conn)
+
+
+def lineup_index_names() -> Iterable[str]:
+    """Index names created by create_schema (for tests)."""
+    return (
+        "ux_lineup_teams_name",
+        "ux_lineup_players_team_jersey",
+        "idx_lineup_players_team_id",
+        "idx_match_lineups_match_id",
+        "idx_match_lineups_player_id",
+    )
+
 
 # Event types enum for reference
 EVENT_TYPES = [

@@ -1245,11 +1245,11 @@ st.markdown(f"""
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
     "Overview", "Shooting", "Passing", "Physical", "Tactical",
     "xG & Analytics", "Heatmaps", "Highlights", "Database", "Settings",
     "AI Recommendations", "Player Performance", "Match Comparison",
-    "🌐 Live Match Data", "Generate Report"
+    "🌐 Live Match Data", "Generate Report", "Roster Management"
 ])
 
 # ============================================================
@@ -3386,6 +3386,403 @@ with tab15:
     except Exception as e:
         _tab_error_boundary("Generate Report", e)
 
+# ============================================================
+# TAB 16: ROSTER MANAGEMENT (Owner: Helal — Member C)
+# ============================================================
+
+with tab16:
+    try:
+        from services.dynamic_roster_manager import DynamicRosterManager
+        st.markdown(
+            '<div class="section-header" style="color: #cbd5e1 !important; font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #DA291C; display: flex; align-items: center; gap: 10px;">Roster Management</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<p style='color:#cbd5e1; margin-bottom:1.25rem;'>Create and edit teams, import roster JSON, assign squads to matches, and review all database rosters.</p>",
+            unsafe_allow_html=True,
+        )
+
+        db = get_db_manager()
+        db.initialize_database()
+        roster_mgr = DynamicRosterManager(Path(db.db_path))
+
+        teams_list = db.list_teams()
+        team_options = {f"{t['name']} (ID: {t['team_id']})": t["team_id"] for t in teams_list}
+        pos_options = ["", "GK", "DEF", "MID", "FWD"]
+
+        def _reload_team_df(team_id: int) -> pd.DataFrame:
+            players = db.get_players_by_team(team_id)
+            if not players:
+                return pd.DataFrame(columns=["DB id", "name", "jersey_number", "position"])
+            df = pd.DataFrame(players)
+            for col in ("player_id", "name", "jersey_number", "position"):
+                if col not in df.columns:
+                    df[col] = None
+            out = pd.DataFrame(
+                {
+                    "DB id": df["player_id"].apply(
+                        lambda x: "" if pd.isna(x) or x is None else str(int(x))
+                    ),
+                    "name": df["name"].fillna("").astype(str),
+                    "jersey_number": pd.to_numeric(df["jersey_number"], errors="coerce"),
+                    "position": df["position"].fillna("").astype(str),
+                }
+            )
+            for i in out.index:
+                p = str(out.at[i, "position"] or "").upper()
+                if p and p not in pos_options:
+                    out.at[i, "position"] = ""
+            return out
+
+        def _count_json_players(data: dict) -> int:
+            n = 0
+            for side in ("A", "B"):
+                n += len((data.get("teams") or {}).get(side, {}).get("players") or {})
+            return n
+
+        st.markdown("---")
+
+        # ----- SUB-SECTION A: Create / Edit Team -----
+        st.markdown("##### A. Create / Edit team")
+        c_new1, c_new2 = st.columns(2)
+        with c_new1:
+            ct_name = st.text_input("Team name", key="roster_ct_name", placeholder="e.g. Liverpool")
+            ct_short = st.text_input("Short name", key="roster_ct_short", placeholder="e.g. LIV")
+        with c_new2:
+            ct_prim = st.color_picker("Primary color", "#FFFFFF", key="roster_ct_prim")
+            ct_sec = st.color_picker("Secondary color", "#000000", key="roster_ct_sec")
+
+        if st.button("Create team", type="primary", key="roster_btn_create_team"):
+            if not (ct_name or "").strip():
+                st.error("Team name is required.")
+            else:
+                try:
+                    new_id = db.add_team(
+                        (ct_name or "").strip(),
+                        (ct_short or "").strip() or None,
+                        ct_prim,
+                        ct_sec,
+                    )
+                    st.success(f"Team created or matched existing: **{new_id}** — `{db.get_team(new_id)['name']}`")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Could not create team: {ex}")
+
+        st.caption("Edit an existing team and its squad below.")
+
+        if not team_options:
+            st.warning("Add a team first before editing players.")
+        else:
+            sel_edit_label = st.selectbox(
+                "Select team to edit",
+                options=list(team_options.keys()),
+                key="roster_edit_team_selectbox",
+            )
+            sel_edit_id = team_options[sel_edit_label]
+            df_key = f"roster_edit_df_{sel_edit_id}"
+            if (
+                st.session_state.get("roster_edit_selected_label") != sel_edit_label
+                or df_key not in st.session_state
+            ):
+                st.session_state["roster_edit_selected_label"] = sel_edit_label
+                st.session_state[df_key] = _reload_team_df(sel_edit_id)
+
+            st.session_state[df_key] = st.data_editor(
+                st.session_state[df_key],
+                column_config={
+                    "DB id": st.column_config.TextColumn(
+                        "DB id", disabled=True, help="Blank = new player (saved as insert)"
+                    ),
+                    "name": st.column_config.TextColumn("Name", required=True, max_chars=120),
+                    "jersey_number": st.column_config.NumberColumn(
+                        "Jersey #", min_value=0, max_value=99, step=1, format="%d"
+                    ),
+                    "position": st.column_config.SelectboxColumn(
+                        "Position", options=pos_options, required=False
+                    ),
+                },
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            b1, b2, b3 = st.columns([1, 1, 2])
+            with b1:
+                add_clicked = st.button("Add player", key="roster_add_row_btn")
+            with b2:
+                save_clicked = st.button("Save changes", type="primary", key="roster_save_players_btn")
+
+            if add_clicked:
+                df_cur = st.session_state[df_key].copy()
+                new_row = pd.DataFrame(
+                    [{"DB id": "", "name": "", "jersey_number": np.nan, "position": ""}]
+                )
+                st.session_state[df_key] = pd.concat([df_cur, new_row], ignore_index=True)
+                st.rerun()
+
+            if save_clicked:
+                try:
+                    df_save = st.session_state[df_key].copy()
+                    updated = 0
+                    created = 0
+                    for _, row in df_save.iterrows():
+                        nm = (str(row.get("name") or "")).strip()
+                        if not nm:
+                            continue
+                        jraw = row.get("jersey_number")
+                        if pd.isna(jraw) or jraw is None or int(float(jraw)) == 0:
+                            jn = None
+                        else:
+                            jn = int(float(jraw))
+                        pos = (str(row.get("position") or "")).strip() or None
+                        dbid = (str(row.get("DB id") or "")).strip()
+                        if not dbid:
+                            db.add_player(sel_edit_id, nm, jn, pos)
+                            created += 1
+                        else:
+                            db.update_player(int(dbid), name=nm, jersey_number=jn, position=pos)
+                            updated += 1
+                    st.success(f"Saved: **{created}** new player(s), **{updated}** updated.")
+                    st.session_state[df_key] = _reload_team_df(sel_edit_id)
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Save failed: {ex}")
+
+            with st.expander("Danger zone", expanded=False):
+                if st.button("Delete selected team", key="roster_delete_team_btn"):
+                    try:
+                        db.delete_team(sel_edit_id)
+                        st.warning("Team deleted.")
+                        st.session_state.pop(df_key, None)
+                        st.session_state.pop("roster_edit_selected_label", None)
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Delete failed: {ex}")
+
+        st.markdown("---")
+
+        # ----- SUB-SECTION B: Import from JSON -----
+        st.markdown("##### B. Import from JSON")
+        import_mode = st.radio(
+            "Source",
+            ["Upload a JSON file", "Path on disk (single file)", "Path to rosters directory (all .json)"],
+            horizontal=True,
+            key="roster_import_mode",
+        )
+        uploaded = None
+        path_single = ""
+        path_dir = ""
+        if import_mode == "Upload a JSON file":
+            uploaded = st.file_uploader("Roster JSON", type=["json"], key="roster_json_upload")
+        elif import_mode == "Path on disk (single file)":
+            path_single = st.text_input(
+                "Absolute or project-relative path to a roster `.json` file",
+                value="rosters/test.json",
+                key="roster_path_single",
+            )
+        else:
+            path_dir = st.text_input(
+                "Directory containing roster JSON files (e.g. `rosters`)",
+                value="rosters",
+                key="roster_path_dir",
+            )
+
+        if st.button("Import", type="primary", key="roster_import_btn"):
+            try:
+                if import_mode == "Upload a JSON file":
+                    if not uploaded:
+                        st.error("Choose a JSON file to upload.")
+                    else:
+                        raw = uploaded.getvalue()
+                        data = json.loads(raw.decode("utf-8"))
+                        declared = _count_json_players(data)
+                        tmp = Path(tempfile.gettempdir()) / "tactivision_roster_uploads"
+                        tmp.mkdir(parents=True, exist_ok=True)
+                        tpath = tmp / uploaded.name
+                        tpath.write_bytes(raw)
+                        res = roster_mgr.bulk_import_from_json(tpath)
+                        st.success(
+                            f"Import OK. JSON defines **{declared}** player entries. "
+                            f"Touched {res['teams_touched']} teams and {res['players_touched']} players."
+                        )
+                elif import_mode == "Path on disk (single file)":
+                    p = Path(path_single.strip())
+                    if not p.is_file():
+                        st.error(f"File not found: `{p}`")
+                    else:
+                        raw_txt = p.read_text(encoding="utf-8")
+                        roster_io_sentinel.track_json_file_read()
+                        data = json.loads(raw_txt)
+                        declared = _count_json_players(data)
+                        res = roster_mgr.bulk_import_from_json(p)
+                        st.success(
+                            f"Import OK from `{p.name}`. JSON defines **{declared}** player entries; "
+                            f"Touched {res['teams_touched']} teams and {res['players_touched']} players."
+                        )
+                else:
+                    d = Path(path_dir.strip())
+                    if not d.is_dir():
+                        st.error(f"Directory not found: `{d}`")
+                    else:
+                        added_t = 0
+                        added_p = 0
+                        for jf in d.glob("*.json"):
+                            try:
+                                res = roster_mgr.bulk_import_from_json(jf)
+                                added_t += res["teams_touched"]
+                                added_p += res["players_touched"]
+                            except Exception as ex:
+                                st.warning(f"Error importing {jf.name}: {ex}")
+                        st.success(f"Directory import finished. Net new teams touched: **{added_t}**, players: **{added_p}**. Expand **Current rosters** below to verify.")
+                        st.rerun()
+            except json.JSONDecodeError as ex:
+                st.error(f"Invalid JSON: {ex}")
+            except Exception as ex:
+                st.error(f"Import error: {ex}")
+
+        st.markdown("---")
+
+        # ----- SUB-SECTION C: Assign roster to match -----
+        st.markdown("##### C. Assign roster to match")
+        matches = db.get_all_matches(limit=500) or []
+        match_labels = []
+        match_id_by_label = {}
+        for m in matches:
+            mid = m.get("match_id")
+            ta = m.get("team_a") or "?"
+            tb = m.get("team_b") or "?"
+            vid = m.get("video_path") or ""
+            label = f"#{mid}: {ta} vs {tb}"
+            if vid:
+                label += f" — {Path(str(vid)).name}"
+            match_labels.append(label)
+            match_id_by_label[label] = mid
+
+        if not match_labels or not team_options:
+            st.info("Need at least one match and one team in the database to assign rosters.")
+        else:
+            pick_m = st.selectbox("Match", options=match_labels, key="roster_assign_match")
+            mid_int = match_id_by_label[pick_m]
+            mid_str = str(mid_int)
+
+            cur = db.get_match_roster(mid_str)
+            if cur:
+                hn = (cur.get("home_team") or {}).get("name", "?")
+                an = (cur.get("away_team") or {}).get("name", "?")
+                st.info(f"Current assignment for match **{mid_str}**: **{hn}** (home, id {cur.get('home_team_id')}) vs **{an}** (away, id {cur.get('away_team_id')}).")
+            else:
+                st.caption(f"No roster assignment stored yet for match id `{mid_str}`.")
+
+            keys = list(team_options.keys())
+            h_idx = 0
+            a_idx = min(1, len(keys) - 1) if len(keys) > 1 else 0
+            col_h, col_a = st.columns(2)
+            with col_h:
+                h_pick = st.selectbox("Home team", options=keys, index=h_idx, key="roster_assign_home")
+            with col_a:
+                a_pick = st.selectbox("Away team", options=keys, index=a_idx, key="roster_assign_away")
+
+            if st.button("Assign roster", type="primary", key="roster_assign_btn"):
+                if h_pick == a_pick:
+                    st.error("Home and away must be different teams.")
+                else:
+                    try:
+                        db.assign_roster_to_match(mid_str, team_options[h_pick], team_options[a_pick])
+                        st.success(f"Roster assigned to match **{mid_str}**.")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Assignment failed: {ex}")
+
+        st.markdown("---")
+        st.markdown("##### C2 lineup preview (dynamic schema)")
+        st.caption(
+            f"Session roster JSON **disk** reads (sentinel): **{roster_io_sentinel.json_file_read_count}**. "
+            "This section loads **only** `lineup_teams` / `lineup_players` via `DynamicRosterManager` — no `rosters/*.json` read."
+        )
+        try:
+            _drm = DynamicRosterManager(Path(db.db_path))
+            lt = _drm.list_teams()
+            if not lt:
+                st.info("No C2 lineup data yet. Run `python migrations/001_dynamic_rosters.py` or `python scripts/seed_dynamic_rosters.py`.")
+            else:
+                from dataclasses import asdict
+
+                id_order = [t.id for t in lt]
+                id_to = {t.id: t for t in lt}
+                c2a, c2b = st.columns(2)
+                with c2a:
+                    tid_a = st.selectbox(
+                        "Team A",
+                        options=id_order,
+                        format_func=lambda i: f"{id_to[i].name} (id {i})",
+                        key="c2_preview_team_a",
+                    )
+                with c2b:
+                    idx_b = min(1, len(id_order) - 1) if len(id_order) > 1 else 0
+                    tid_b = st.selectbox(
+                        "Team B",
+                        options=id_order,
+                        index=idx_b,
+                        format_func=lambda i: f"{id_to[i].name} (id {i})",
+                        key="c2_preview_team_b",
+                    )
+                pa = _drm.list_players(tid_a)
+                pb = _drm.list_players(tid_b)
+                c2a.dataframe(
+                    pd.DataFrame([asdict(p) for p in pa]) if pa else pd.DataFrame(),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(280, 40 + len(pa) * 28),
+                )
+                c2b.dataframe(
+                    pd.DataFrame([asdict(p) for p in pb]) if pb else pd.DataFrame(),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(280, 40 + len(pb) * 28),
+                )
+        except Exception as ex:
+            st.warning(f"C2 preview unavailable: {ex}")
+
+        st.markdown("---")
+        st.markdown("#### Current rosters")
+        _, rr2 = st.columns([4, 1])
+        with rr2:
+            if st.button("Refresh view", use_container_width=True, key="roster_mgmt_refresh"):
+                for k in list(st.session_state.keys()):
+                    if k.startswith("roster_edit_df_"):
+                        del st.session_state[k]
+                if "roster_edit_selected_label" in st.session_state:
+                    del st.session_state["roster_edit_selected_label"]
+                st.rerun()
+
+        teams_list = db.list_teams()
+        if not teams_list:
+            st.info("No teams in the database yet. Create a team above or import a JSON roster.")
+        else:
+            for t in sorted(teams_list, key=lambda x: x.get("name") or ""):
+                tid = t["team_id"]
+                pname = t.get("primary_color") or "#FFFFFF"
+                sname = t.get("secondary_color") or "#000000"
+                sq = (
+                    f"<span style='display:inline-block;width:14px;height:14px;background:{pname};"
+                    f"border-radius:3px;border:1px solid rgba(255,255,255,0.25);margin-right:6px;vertical-align:middle;'></span>"
+                    f"<span style='display:inline-block;width:14px;height:14px;background:{sname};"
+                    f"border-radius:3px;border:1px solid rgba(255,255,255,0.25);margin-right:10px;vertical-align:middle;'></span>"
+                )
+                short = t.get("short_name") or "—"
+                with st.expander(f"{sq} **{t.get('name', 'Team')}** (ID {tid}, short: {short})", expanded=False):
+                    tpl = db.get_players_by_team(tid)
+                    if tpl:
+                        st.dataframe(
+                            pd.DataFrame(tpl),
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(320, 40 + len(tpl) * 36),
+                        )
+                    else:
+                        st.caption("No players on this team yet.")
+
+    except Exception as e:
+        _tab_error_boundary("Roster Management", e)
 # ============================================================
 # FOOTER
 # ============================================================
