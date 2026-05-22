@@ -1728,6 +1728,8 @@ def main():
                         help='Chunk size in minutes for long video processing (0 = no chunking)')
     parser.add_argument('--memory-limit', type=float, default=80.0,
                         help='Warn if memory usage exceeds this %% of system RAM')
+    parser.add_argument('--max-seconds', type=float, default=0,
+                        help='Process only the first N seconds of the video (0 = whole video)')
 
     args = parser.parse_args()
     
@@ -1815,6 +1817,7 @@ def main():
             enable_social=args.social,
             chunk_size_minutes=args.chunk_size,
             memory_limit_percent=args.memory_limit,
+            max_seconds=args.max_seconds,
             tracker=tracker,
             reid_layer=reid_layer,
             reid_classifier=reid_classifier,
