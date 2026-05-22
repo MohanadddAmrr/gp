@@ -67,6 +67,15 @@ ball_tracking:
   smoothing_factor: 0.3
   prediction_enabled: true
   max_prediction_frames: 10
+  # P15 — RT-DETR ball-only second pass. Runs only on frames where the
+  # primary detector missed the ball. Off by default: on CPU it adds a
+  # per-frame cost; enable when ball-detection rate matters more than speed.
+  second_pass:
+    enabled: false
+    weights: weights/rtdetr-l.pt
+    confidence_threshold: 0.25
+    crop_size: 640
+    max_jump_px: 300
   enable_physics: true
   gravity: 9.81
   air_resistance: 0.02

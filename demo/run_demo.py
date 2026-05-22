@@ -92,6 +92,25 @@ def _load_tracking_config() -> dict:
     return cfg.get("detection", {}).get("tracking", {}) or {}
 
 
+def _load_ball_second_pass_config() -> dict:
+    """Read the ball_tracking.second_pass section from config.yaml (P15).
+
+    Returns an empty dict on any failure so the caller falls back to the
+    default of a disabled second pass without crashing the demo.
+    """
+    if _yaml is None:
+        return {}
+    cfg_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    if not cfg_path.exists():
+        return {}
+    try:
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            cfg = _yaml.safe_load(fh) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+    return cfg.get("ball_tracking", {}).get("second_pass", {}) or {}
+
+
 def _load_tracker_algorithm(default: str = "bytetrack") -> str:
     """Read detection.tracking.algorithm from config.yaml.
 
@@ -651,7 +670,24 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
 
     # Color ball detector
     color_ball_detector = ColorBallDetector()
-    
+
+    # P15 — RT-DETR ball-only second pass (config-gated, off by default).
+    _ball_sp_cfg = _load_ball_second_pass_config()
+    rtdetr_ball_detector = None
+    ball_second_pass_max_jump = float(_ball_sp_cfg.get("max_jump_px", 300.0))
+    if bool(_ball_sp_cfg.get("enabled", False)):
+        from services.rtdetr_ball_detector import RTDetrBallDetector
+
+        rtdetr_ball_detector = RTDetrBallDetector(
+            weights_path=ROOT.parent / _ball_sp_cfg.get("weights", "weights/rtdetr-l.pt"),
+            conf=float(_ball_sp_cfg.get("confidence_threshold", 0.25)),
+            crop_size=int(_ball_sp_cfg.get("crop_size", 640)),
+        )
+        print("Ball second pass: enabled (RT-DETR, runs only when YOLO misses the ball)")
+    else:
+        print("Ball second pass: disabled")
+
+
     # Scaling: assume pitch is 105m long
     meter_per_px = 105.0 / width
     
@@ -664,6 +700,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     yolo_detections = 0
     color_detections = 0
     predicted_detections = 0
+    rtdetr_ball_detections = 0
     speed_capped_count = 0
     
     # Team assignment tracking
@@ -942,7 +979,18 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
         
         # Ball detection fallback (skip color detection to conserve memory)
         # Uses only YOLO ball detection + Kalman prediction
-        
+
+        # P15 — RT-DETR ball-only second pass. Invoked only on frames where
+        # the primary YOLO detector missed the ball, before falling back to
+        # trajectory prediction.
+        if ball_box is None and rtdetr_ball_detector is not None:
+            second_box = rtdetr_ball_detector.detect_best(
+                frame, last_known_ball_pos, max_jump_px=ball_second_pass_max_jump
+            )
+            if second_box is not None:
+                ball_box = second_box
+                rtdetr_ball_detections += 1
+
         # Periodic memory cleanup every 50 frames to prevent memory buildup
         if frame_idx % 50 == 0:
             gc.collect()
@@ -1421,6 +1469,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
             "max_velocity_px_s": float(np.max(ball_velocities)) if ball_velocities else 0.0,
             "yolo_detections": yolo_detections,
             "color_detections": color_detections,
+            "rtdetr_second_pass_detections": rtdetr_ball_detections,
             "predicted_detections": predicted_detections,
             "position_history": ball_position_history[-500:]
         },
@@ -1594,7 +1643,8 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     print(f"  Match Duration: {match_duration_minutes:.1f} minutes")
     print(f"  Players: {canonical_player_count} canonical ({raw_track_count} raw YOLO tracks)")
     print(f"  Ball detections: {len(ball_position_history)}/{frame_idx} frames ({len(ball_position_history)/frame_idx*100:.1f}%)")
-    print(f"    - YOLO: {yolo_detections}, Color: {color_detections}, Predicted: {predicted_detections}")
+    print(f"    - YOLO: {yolo_detections}, Color: {color_detections}, "
+          f"RT-DETR 2nd-pass: {rtdetr_ball_detections}, Predicted: {predicted_detections}")
     print(f"  Possession - Team A: {possession_percentage['A']:.1f}%, Team B: {possession_percentage['B']:.1f}%")
     print(f"  Passes: {pass_stats['total_passes']} ({pass_stats['completed_passes']} completed)")
     print(f"  Shots: {shot_stats['total_shots']}")

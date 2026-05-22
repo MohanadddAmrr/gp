@@ -123,6 +123,7 @@ def test_chunk_state_json_round_trip() -> None:
         ball_history_tail=[[1.0, 2.0]],
         person_detections_total=10,
         ball_detections_total=2,
+        ball_second_pass_total=5,
         chunks_completed=1,
     )
     payload = s.to_json()
@@ -131,6 +132,7 @@ def test_chunk_state_json_round_trip() -> None:
     assert s2.canonical_id_map == {42: 7, 99: 7}
     assert s2.ball_history_tail == [[1.0, 2.0]]
     assert s2.person_detections_total == 10
+    assert s2.ball_second_pass_total == 5
 
 
 # --- end-to-end: synthetic video, multi-chunk + resume ---------------------
