@@ -71,7 +71,7 @@ ball_tracking:
   # primary detector missed the ball. Off by default: on CPU it adds a
   # per-frame cost; enable when ball-detection rate matters more than speed.
   second_pass:
-    enabled: false
+    enabled: true
     weights: weights/rtdetr-l.pt
     confidence_threshold: 0.25
     crop_size: 640

@@ -954,6 +954,11 @@ with st.sidebar:
                 events = (m.get('pass_detection', {}).get('total_passes', 0)
                           + m.get('shot_detection', {}).get('total_shots', 0))
                 display_name = f"{t_a} vs {t_b}"
+                # Two output folders can share the same team names (e.g. a
+                # "_backup" run). Disambiguate by folder name so the newer
+                # run is not silently overwritten in the selector.
+                if display_name in video_options:
+                    display_name = f"{display_name} ({d.name})"
                 video_options[display_name] = {"dir": d, "duration": dur, "events": events}
 
     if video_options:
