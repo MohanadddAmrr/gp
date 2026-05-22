@@ -33,14 +33,14 @@ class EventDetector:
 
     def __init__(
         self,
-        min_velocity_mps: float = 1.0,  # Lowered from 2.0 for better sensitivity
-        min_distance_m: float = 3.0,    # Lowered from 5.0 to catch short passes
-        max_distance_m: float = 60.0,   # Increased from 45.0 for long balls
+        min_velocity_mps: float = 4.0,  # A real pass is struck with intent
+        min_distance_m: float = 5.0,    # Below 5m is closer to a touch than a pass
+        max_distance_m: float = 60.0,   # Long balls
         shot_velocity_threshold_mps: float = 12.0,  # A real shot is struck hard; passes are slower
         shot_max_velocity_mps: float = 45.0,        # Pro shots peak ~35-40 m/s; above = tracking noise
         shot_angle_threshold_deg: float = 30.0,     # A shot travels fairly straight at goal
         possession_memory_sec: float = 2.0,  # Time window to attribute a shot to last possessor
-        pass_cooldown_frames: int = 5,  # New: prevent duplicate pass detection
+        pass_cooldown_frames: int = 24,  # ~1s at processed fps; distinct passes are not closer than that
         goal_detection_frames: int = 60,  # Frames to look for goal after shot
         goal_line_buffer_px: float = 50.0,  # Buffer zone for goal line detection
         

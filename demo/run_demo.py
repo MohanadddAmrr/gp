@@ -540,9 +540,9 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     ball_tracker = BallTracker()
     possession_tracker = PossessionTracker(distance_threshold=60.0)
     event_detector = EventDetector(
-        min_velocity_mps=1.5,  # Lower threshold for more pass detection
-        min_distance_m=3.0,    # Lower minimum distance
-        max_distance_m=60.0,   # Higher max distance
+        min_velocity_mps=4.0,  # A real pass is struck with intent
+        min_distance_m=5.0,    # Below 5m is closer to a touch than a pass
+        max_distance_m=60.0,   # Allow long balls
     )
     sprint_detector = SprintDetector()
     tactical_analyzer = TacticalAnalyzer(
