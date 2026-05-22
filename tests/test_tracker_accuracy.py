@@ -410,3 +410,180 @@ def test_reid_near_color_match_does_not_false_merge() -> None:
     canon_a = reid.resolve(1, (300, 300), pure_red, cls, frame_idx=0)
     canon_b = reid.resolve(2, (305, 300), deep_blue, cls, frame_idx=10)
     assert canon_a != canon_b
+
+
+# ===========================================================================
+# Seif — AC3: MOTA / IDF1 / ID-switches printed from accuracy_evaluator
+# Days 15–17 | Acceptance Criterion 3
+# ===========================================================================
+# The plan says: "tests/test_tracker_accuracy.py prints MOTA, IDF1,
+# ID-switches" — these tests verify the numbers are correct AND printable.
+
+import json
+import tempfile
+from pathlib import Path
+
+from services.accuracy_evaluator import (
+    compute_detection_metrics,
+    compute_id_metrics,
+    compute_mota,
+    evaluate,
+)
+
+
+def _make_gt_payload(frames):
+    return {
+        "video": "test.mp4", "fps": 25.0,
+        "frame_size": [640, 360],
+        "coordinate_space": "inference_640x360",
+        "source": "human",
+        "frames": frames,
+    }
+
+
+def _obj(oid, cls, bbox, conf=1.0):
+    return {"id": oid, "class": cls, "bbox": bbox, "conf": conf}
+
+
+# ── AC3 Test 1: MOTA printed correctly ───────────────────────────────────────
+
+def test_mota_computed_and_printable(capsys):
+    """
+    AC3: tests/test_tracker_accuracy.py prints MOTA.
+    MOTA = 1 - (FP+FN+IDSW)/GT_total.
+    Perfect tracking → MOTA = 1.0.
+    """
+    box = [0, 0, 10, 10]
+    objs = [_obj(1, "team_a", box), _obj(2, "team_b", [50, 50, 10, 10])]
+    gt   = {"_by_frame": {0: objs, 1: objs}, "fps": 25.0}
+    pred = {"_by_frame": {0: objs, 1: objs}, "fps": 25.0}
+
+    m = compute_mota(gt, pred)
+    print(f"MOTA={m['mota']:.3f}  MOTP={m['motp']:.3f}  "
+          f"FP={m['fp']}  FN={m['fn']}  IDSW={m['id_switches']}")
+
+    captured = capsys.readouterr()
+    assert "MOTA=1.000" in captured.out
+    assert m["mota"] == 1.0
+
+
+# ── AC3 Test 2: IDF1 printed correctly ───────────────────────────────────────
+
+def test_idf1_computed_and_printable(capsys):
+    """
+    AC3: tests/test_tracker_accuracy.py prints IDF1.
+    Perfect identity → IDF1 = 1.0.
+    """
+    box = [0, 0, 10, 10]
+    objs = [_obj(1, "team_a", box), _obj(2, "team_b", [50, 50, 10, 10])]
+    gt   = {"_by_frame": {0: objs, 1: objs, 2: objs}}
+    pred = {"_by_frame": {0: objs, 1: objs, 2: objs}}
+
+    idm = compute_id_metrics(gt, pred)
+    print(f"IDF1={idm['idf1']:.3f}  "
+          f"ID-switches={idm['id_switches']}  "
+          f"ID-sw/100fr={idm['id_switch_rate_per_100_frames']:.2f}")
+
+    captured = capsys.readouterr()
+    assert "IDF1=1.000" in captured.out
+    assert idm["idf1"] == 1.0
+    assert idm["id_switches"] == 0
+
+
+# ── AC3 Test 3: ID-switches counted and printed ───────────────────────────────
+
+def test_id_switches_computed_and_printable(capsys):
+    """
+    AC3: tests/test_tracker_accuracy.py prints ID-switches.
+    One switch on frame 2 → id_switches = 1.
+    """
+    box = [0, 0, 10, 10]
+    gt   = {"_by_frame": {
+        0: [_obj(1, "team_a", box)],
+        1: [_obj(1, "team_a", box)],
+        2: [_obj(1, "team_a", box)],
+    }}
+    pred = {"_by_frame": {
+        0: [_obj(100, "team_a", box)],
+        1: [_obj(100, "team_a", box)],
+        2: [_obj(200, "team_a", box)],   # ← switch here
+    }}
+
+    idm = compute_id_metrics(gt, pred)
+    print(f"ID-switches={idm['id_switches']}  "
+          f"rate={idm['id_switch_rate_per_100_frames']:.2f}/100fr")
+
+    captured = capsys.readouterr()
+    assert "ID-switches=1" in captured.out
+    assert idm["id_switches"] == 1
+
+
+# ── AC3 Test 4: end-to-end evaluate() prints all three ───────────────────────
+
+def test_evaluate_prints_mota_idf1_idswitches(capsys, tmp_path):
+    """
+    AC3 full: evaluate() produces a report with MOTA, IDF1, and ID-switches
+    all printable in one go — exactly what the Accuracy Report tab shows.
+    """
+    box = [0, 0, 10, 10]
+    objs = [_obj(1, "team_a", box), _obj(2, "team_b", [50, 50, 10, 10])]
+    payload = _make_gt_payload([
+        {"frame_idx": 0, "objects": objs},
+        {"frame_idx": 1, "objects": objs},
+    ])
+    gt_p   = tmp_path / "gt.json"
+    pred_p = tmp_path / "pred.json"
+    gt_p.write_text(json.dumps(payload),   encoding="utf-8")
+    pred_p.write_text(json.dumps({**payload, "source": "pipeline"}),
+                      encoding="utf-8")
+
+    report = evaluate(gt_p, pred_p)
+
+    mota = report["mota"]["mota"]
+    idf1 = report["identity"]["idf1"]
+    idsw = report["identity"]["id_switches"]
+    print(f"MOTA={mota:.3f}  IDF1={idf1:.3f}  ID-switches={idsw}")
+
+    captured = capsys.readouterr()
+    assert "MOTA=1.000" in captured.out
+    assert "IDF1=1.000" in captured.out
+    assert "ID-switches=0" in captured.out
+
+
+# ── AC3 Test 5: MOTA with real imperfect tracking ────────────────────────────
+
+def test_mota_with_imperfect_tracking_below_one(capsys, tmp_path):
+    """
+    Day 16: Verify MOTA < 1.0 when tracking is imperfect.
+    Simulates 1 ID-switch across 2 frames.
+    """
+    box = [0, 0, 10, 10]
+    gt_payload = _make_gt_payload([
+        {"frame_idx": 0, "objects": [_obj(1, "team_a", box)]},
+        {"frame_idx": 1, "objects": [_obj(1, "team_a", box)]},
+    ])
+    pred_payload = _make_gt_payload([
+        {"frame_idx": 0, "objects": [_obj(10, "team_a", box)]},
+        {"frame_idx": 1, "objects": [_obj(20, "team_a", box)]},
+    ])
+    pred_payload["source"] = "pipeline"
+
+    gt_p   = tmp_path / "gt.json"
+    pred_p = tmp_path / "pred.json"
+    gt_p.write_text(json.dumps(gt_payload),   encoding="utf-8")
+    pred_p.write_text(json.dumps(pred_payload), encoding="utf-8")
+
+    report = evaluate(gt_p, pred_p)
+
+    mota = report["mota"]["mota"]
+    idf1 = report["identity"]["idf1"]
+    idsw = report["identity"]["id_switches"]
+
+    print(f"MOTA={mota:.3f}  IDF1={idf1:.3f}  ID-switches={idsw}")
+
+    captured = capsys.readouterr()
+    assert mota < 1.0
+    assert idsw >= 1
+    assert "MOTA=" in captured.out
+    assert "IDF1=" in captured.out
+    assert "ID-switches=" in captured.out
