@@ -144,7 +144,16 @@ class JerseyColorClassifier:
     def sample_jersey_color(
         self, frame: np.ndarray, bbox: Tuple[float, float, float, float], player_id: int
     ):
-        """Sample the dominant jersey color from a player's bounding box."""
+        """Sample the dominant jersey color from a player's bounding box.
+
+        Tightened sampling band (20%-50% vertical, 25%-75% horizontal) to
+        avoid head, shorts and grass leakage that previously pulled the
+        sampled median hue toward grass-green (~60deg) and made every red
+        Liverpool player appear closer to Tottenham yellow than to red.
+
+        Also explicitly masks pitch-green pixels (hue 35-95 at mid-high
+        saturation/value) before computing the dominant jersey hue.
+        """
         x1, y1, x2, y2 = map(int, bbox)
         h, w = frame.shape[:2]
 
@@ -154,16 +163,17 @@ class JerseyColorClassifier:
         if x2 <= x1 or y2 <= y1:
             return
 
-        torso_y2 = y1 + int((y2 - y1) * 0.4)
+        box_h = y2 - y1
         box_w = x2 - x1
-        margin = int(box_w * 0.2)
-        torso_x1 = x1 + margin
-        torso_x2 = x2 - margin
+        torso_y1 = y1 + int(box_h * 0.20)
+        torso_y2 = y1 + int(box_h * 0.50)
+        torso_x1 = x1 + int(box_w * 0.25)
+        torso_x2 = x2 - int(box_w * 0.25)
 
-        if torso_x2 <= torso_x1 or torso_y2 <= y1:
+        if torso_x2 <= torso_x1 or torso_y2 <= torso_y1:
             return
 
-        torso = frame[y1:torso_y2, torso_x1:torso_x2]
+        torso = frame[torso_y1:torso_y2, torso_x1:torso_x2]
         if torso.size == 0:
             return
 
@@ -172,8 +182,20 @@ class JerseyColorClassifier:
         sats = hsv[:, :, 1].flatten()
         vals = hsv[:, :, 2].flatten()
 
-        # Filter out low saturation (white/grey/black)
-        mask = (sats > 40) & (vals > 50) & (vals < 230)
+        # Pitch-green mask: hue 35-95 with mid/high sat is grass. We exclude
+        # these pixels so the dominant hue reflects the JERSEY, not grass.
+        # (Tottenham canary yellow is hue ~28 — safely outside this range.)
+        grass_mask = (hues >= 35) & (hues <= 95) & (sats >= 60) & (sats <= 200)
+
+        # Skin mask: orange-tan range with mid saturation — typical for face/arms.
+        skin_mask = (hues >= 5) & (hues <= 25) & (sats >= 30) & (sats <= 130) & (vals >= 120)
+
+        # Valid jersey pixel: not too desaturated (white/grey is OK as long as
+        # vals are bounded), not grass, not skin.
+        mask = (vals > 50) & (vals < 235) & (~grass_mask) & (~skin_mask)
+        # Keep low-sat pixels (white kits) only if value is mid-bright.
+        mask &= ((sats > 35) | ((sats <= 35) & (vals > 130)))
+
         valid_hues = hues[mask]
         valid_sats = sats[mask]
         valid_vals = vals[mask]
@@ -181,7 +203,8 @@ class JerseyColorClassifier:
         if len(valid_hues) < 10:
             return
 
-        # Dominant hue
+        # Dominant hue via 36-bin histogram (circular: bin 35 and bin 0 are
+        # adjacent for the red wrap).
         hist, bin_edges = np.histogram(valid_hues, bins=36, range=(0, 180))
         dominant_hue = int(bin_edges[np.argmax(hist)])
         avg_sat = int(np.mean(valid_sats))
@@ -357,6 +380,128 @@ class JerseyColorClassifier:
         """Get team assignment for a player."""
         return self._team_assignments.get(player_id)
 
+    def finalize_teams_ocr_anchored(
+        self,
+        ocr_readings: Dict[int, List[int]],
+        roster_players_A: Dict[str, str],
+        roster_players_B: Dict[str, str],
+    ) -> Dict[int, str]:
+        """Per-player team finalization driven by HSV-distance + OCR override.
+
+        Pure colour k-means clustering fails on broadcast footage: Liverpool
+        red and Tottenham yellow samples overlap heavily after lighting,
+        motion blur, jersey trim and crowd bleed, and k-means collapses them
+        into one giant cluster + small outliers (verified empirically on 60s
+        of Lpool vs Spurs: cluster sizes were ~49/14/2 instead of 11/11/~10).
+
+        OCR-anchored cluster voting also fails because the two PL rosters
+        share most numbers (1-10, 17, 19-21, 38 etc.) — across 60s of
+        footage only ONE OCR'd number was unique to one roster. Not enough
+        signal to label clusters.
+
+        This routine classifies each player INDIVIDUALLY:
+          - Sampled HSV vs each team's canonical hex code -> distance score
+            (hue weighted 3:1 over S/V; if a team's target is desaturated,
+            use S/V distance only).
+          - OVERRIDE: if the player's OCR'd numbers contain one that exists
+            in exactly one of the two rosters, that team wins regardless of
+            colour distance.
+          - REF gate: only if the player's nearest team is still far in HSV
+            distance AND their saturation is low (black/grey/fluo).
+        """
+        # Build per-player features.
+        pids: List[int] = []
+        feats: Dict[int, Tuple[float, float, float]] = {}  # pid -> (hue, sat, val)
+        for pid, hues in self._color_samples.items():
+            if len(hues) < 3:
+                continue
+            sats = self._saturation_samples.get(pid, [])
+            vals = self._value_samples.get(pid, [])
+            if not sats or not vals:
+                continue
+            h = self._circular_mean_hue(hues)
+            s = float(np.median(sats))
+            v = float(np.median(vals))
+            feats[pid] = (h, s, v)
+            pids.append(pid)
+
+        if not pids:
+            return {}
+
+        hex_a = self.team_colors.get('A')
+        hex_b = self.team_colors.get('B')
+        target_a = self._hex_to_hsv(hex_a) if hex_a and hex_a.startswith('#') else None
+        target_b = self._hex_to_hsv(hex_b) if hex_b and hex_b.startswith('#') else None
+
+        def _dist_to(target, h, s, v) -> float:
+            if target is None:
+                return 999.0
+            h_t, s_t, v_t = target
+            # Sat/Val distance always counts (handles white/black kits).
+            sv_d = float(np.hypot((s - s_t) / 255.0, (v - v_t) / 255.0))
+            # Desaturated target (white/grey/black) -> ignore hue entirely.
+            if s_t < 40:
+                return sv_d + 2.0 * (1.0 if s > 80 else 0.0)
+            # Desaturated sample but coloured target -> hue is unreliable;
+            # heavy penalty (the player's kit isn't this colour at all).
+            if s < 40:
+                return sv_d + 2.0
+            cos_t = np.cos(h_t * np.pi / 90.0)
+            sin_t = np.sin(h_t * np.pi / 90.0)
+            cos_s = np.cos(h * np.pi / 90.0)
+            sin_s = np.sin(h * np.pi / 90.0)
+            hue_d = float(np.hypot(cos_s - cos_t, sin_s - sin_t))
+            return hue_d * 3.0 + sv_d
+
+        # Per-player OCR signal: which roster do their unique-number reads
+        # point to? (None if no unique-roster numbers were read.)
+        def _ocr_team(pid: int) -> Optional[str]:
+            va = vb = 0
+            for n in ocr_readings.get(pid, []):
+                key = str(int(n))
+                in_a = key in roster_players_A
+                in_b = key in roster_players_B
+                if in_a and not in_b:
+                    va += 1
+                elif in_b and not in_a:
+                    vb += 1
+            if va == 0 and vb == 0:
+                return None
+            return 'A' if va > vb else ('B' if vb > va else None)
+
+        self._team_assignments = {}
+
+        # Single-pass per-player classification against the canonical team
+        # hex codes. We do NOT bootstrap "observed" centroids from OCR-
+        # anchored players because OCR misreads on the wrong team (e.g. a
+        # Liverpool player whose #11 gets read as #6) poison the centroid
+        # for the opposing team and flip the rest of the classification.
+        # OCR override is applied only when it AGREES with the colour
+        # signal, or when the colour signal is weak (low saturation).
+        for pid in pids:
+            h, s, v = feats[pid]
+            da = _dist_to(target_a, h, s, v)
+            db = _dist_to(target_b, h, s, v)
+            color_team = 'A' if da <= db else 'B'
+            color_margin = abs(da - db)
+
+            ocr_team = _ocr_team(pid)
+
+            # REF gate: very dark or very desaturated AND neither team
+            # colour is a close match.
+            if min(da, db) > 1.5 and (v < 70 or s < 35) and ocr_team is None:
+                self._team_assignments[pid] = 'REF'
+                continue
+
+            # OCR override only when the colour signal is weak (small margin
+            # between teams) OR when OCR agrees with colour. A strong-margin
+            # disagreement is treated as an OCR misread.
+            if ocr_team is not None and (ocr_team == color_team or color_margin < 0.4):
+                self._team_assignments[pid] = ocr_team
+            else:
+                self._team_assignments[pid] = color_team
+
+        return self._team_assignments
 
 
 class JerseyNumberOCR:
@@ -622,7 +767,50 @@ class PlayerIdentityManager:
         Returns:
             Dict mapping canonical_id -> {team, number, name, display}
         """
-        team_assignments = self.color_classifier.finalize_teams()
+        # OCR-anchored team finalization: use jersey numbers (which only exist
+        # in one roster) to label colour clusters, instead of trying to match
+        # broadcast-shifted HSV samples to canonical team hex codes.
+        ocr_readings: Dict[int, List[int]] = {}
+        if self.ocr:
+            ocr_readings = dict(self.ocr._number_readings)
+
+        roster_a = self.roster.teams.get("A", {}).get("players", {}) if self.roster.is_loaded() else {}
+        roster_b = self.roster.teams.get("B", {}).get("players", {}) if self.roster.is_loaded() else {}
+
+        if self.roster.is_loaded() and ocr_readings:
+            team_assignments = self.color_classifier.finalize_teams_ocr_anchored(
+                ocr_readings, roster_a, roster_b
+            )
+            a_n = sum(1 for t in team_assignments.values() if t == 'A')
+            b_n = sum(1 for t in team_assignments.values() if t == 'B')
+            r_n = sum(1 for t in team_assignments.values() if t == 'REF')
+            print(f"  Team finalize (OCR-anchored): A={a_n}, B={b_n}, REF={r_n}")
+            # Diagnostic dump: per-player sampled HSV vs team assignment.
+            try:
+                from pathlib import Path as _P
+                import json as _json
+                _dump = []
+                for _pid, _hues in self.color_classifier._color_samples.items():
+                    if len(_hues) < 3:
+                        continue
+                    _h = self.color_classifier._circular_mean_hue(_hues)
+                    _s = float(np.median(self.color_classifier._saturation_samples.get(_pid, [0])))
+                    _v = float(np.median(self.color_classifier._value_samples.get(_pid, [0])))
+                    _dump.append({
+                        "pid": int(_pid),
+                        "n_samples": len(_hues),
+                        "h": int(_h), "s": int(_s), "v": int(_v),
+                        "team": team_assignments.get(_pid),
+                        "ocr": [int(x) for x in ocr_readings.get(_pid, [])],
+                    })
+                _P("logs").mkdir(exist_ok=True)
+                with open("logs/hsv_dump.json", "w", encoding="utf-8") as _f:
+                    _json.dump(_dump, _f, indent=2)
+                print(f"  [diag] wrote logs/hsv_dump.json ({len(_dump)} players)")
+            except Exception as _ex:
+                print(f"  [diag] HSV dump failed: {_ex}")
+        else:
+            team_assignments = self.color_classifier.finalize_teams()
 
         jersey_numbers = {}
         if self.ocr:
@@ -630,10 +818,10 @@ class PlayerIdentityManager:
 
         # Include ALL tracked players, not just those with jersey numbers
         all_pids = set(team_assignments.keys())
-        
+
         # Also add players that only have jersey number detections
         all_pids.update(set(jersey_numbers.keys()))
-        
+
         # Add any players that have been seen but not yet classified
         all_pids.update(set(self.color_classifier._color_samples.keys()))
 
@@ -642,17 +830,30 @@ class PlayerIdentityManager:
             number = jersey_numbers.get(pid, None)
             name = None
 
-            if team and number and self.roster.is_loaded():
-                name = self.roster.get_player_name(team, number)
+            # Gate roster name lookup: only resolve a name if the OCR'd number
+            # actually exists in this player's assigned team's roster. Without
+            # this guard, a Liverpool player whose number was misread as 6 (a
+            # number that exists in Tottenham's roster) gets labelled
+            # "Radu Dragusin" — the bug visible in the verification screenshot.
+            if team in ('A', 'B') and number and self.roster.is_loaded():
+                roster_for_team = roster_a if team == 'A' else roster_b
+                if str(int(number)) in roster_for_team:
+                    name = roster_for_team[str(int(number))]
+                else:
+                    # OCR number doesn't match this team's roster — likely a
+                    # bad read, drop it to avoid wrong-team name attribution.
+                    number = None
 
             if name and number:
                 display = f"{name} (#{number})"
-            elif number and team:
+            elif number and team in ('A', 'B'):
                 team_name = self.roster.get_team_name(team) if self.roster.is_loaded() else f"Team {team}"
                 display = f"{team_name} #{number}"
-            elif team:
+            elif team in ('A', 'B'):
                 team_name = self.roster.get_team_name(team) if self.roster.is_loaded() else f"Team {team}"
                 display = f"{team_name} (P{pid})"
+            elif team == 'REF':
+                display = f"Referee (P{pid})"
             else:
                 display = f"P{pid}"
 

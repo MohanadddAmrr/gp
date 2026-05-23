@@ -620,6 +620,33 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
+    /* Re-skin the white Streamlit top bar (which contains the hamburger
+       menu, Deploy button etc.) to match the dark dashboard background.
+       Without this, every page renders with a glaring white strip across
+       the very top that breaks the dark theme. */
+    header[data-testid="stHeader"],
+    div[data-testid="stToolbar"],
+    div[data-testid="stDecoration"] {
+        background-color: #0f1419 !important;
+        background: #0f1419 !important;
+    }
+    header[data-testid="stHeader"] * {
+        color: #cbd5e1 !important;
+    }
+    /* Streamlit injects a small purple/red decoration bar at the top —
+       suppress it so the colour bar across the page is only ours. */
+    div[data-testid="stDecoration"] {
+        display: none !important;
+    }
+    /* Pull the main app content snug against the top so the re-skinned
+       header is the only thing above the title card. */
+    div[data-testid="stAppViewContainer"] > .main {
+        padding-top: 0 !important;
+    }
+    .block-container {
+        padding-top: 1.5rem !important;
+    }
+
     /* Smooth scrolling */
     html {
         scroll-behavior: smooth;
@@ -1282,9 +1309,21 @@ with tab1:
         detected_sprints = sprint_stats.get('total_sprints', 0)
         total_sprints = detected_sprints if detected_sprints > 0 else expected_sprints
 
+        # "Players" should reflect unique players on the pitch, not the raw
+        # tracking-ID count (which inflates to 100+ from ByteTrack re-acquires).
+        # Prefer the canonical count from metrics; cap at 22 (full match squad)
+        # so an obviously inflated number never reaches the user-facing tile.
+        canonical_n = metrics.get(
+            'num_players',
+            metrics.get('tracking_quality', {}).get('canonical_players', len(actual_players))
+        )
+        unique_named = len({(v.get('team'), v.get('number')) for v in player_identities.values()
+                            if v.get('name') and v.get('team') in ('A', 'B')})
+        players_display = min(max(canonical_n, unique_named), 22)
+
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
-            st.metric("Players", len(actual_players))
+            st.metric("Players", players_display, delta=f"{unique_named} identified", delta_color="off")
         with col2:
             st.metric("Possession", f"{poss_pct.get('A', 0):.0f}%", delta=f"vs {poss_pct.get('B', 0):.0f}%", delta_color="off")
         with col3:
@@ -1464,25 +1503,51 @@ with tab2:
         if shot_events:
             fig = go.Figure()
 
-            # Add pitch outline
-            fig.add_shape(type="rect", x0=0, y0=0, x1=100, y1=100,
-                         line=dict(color="white", width=2), fillcolor="rgba(34, 139, 34, 0.3)")
+            # ── Pitch background — layered green stripes for a broadcast look ──
+            stripe_top = "rgba(28, 110, 38, 0.55)"
+            stripe_bot = "rgba(22, 92, 32, 0.55)"
+            n_stripes = 10
+            for k in range(n_stripes):
+                y_lo = k * (100.0 / n_stripes)
+                y_hi = (k + 1) * (100.0 / n_stripes)
+                fig.add_shape(
+                    type="rect", x0=0, y0=y_lo, x1=100, y1=y_hi,
+                    line=dict(width=0),
+                    fillcolor=stripe_top if k % 2 == 0 else stripe_bot,
+                    layer="below",
+                )
 
-            fig.add_shape(type="line", x0=50, y0=0, x1=50, y1=100,
-                         line=dict(color="white", width=2))
+            line_style = dict(color="rgba(255,255,255,0.85)", width=2)
 
-            fig.add_shape(type="circle", x0=40, y0=40, x1=60, y1=60,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0)")
+            # Pitch outline + halfway line
+            fig.add_shape(type="rect", x0=0, y0=0, x1=100, y1=100, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="line", x0=50, y0=0, x1=50, y1=100, line=line_style)
+            # Center circle + spot
+            fig.add_shape(type="circle", x0=41, y0=41, x1=59, y1=59, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="circle", x0=49.4, y0=49.4, x1=50.6, y1=50.6, line=dict(width=0), fillcolor="white")
 
-            fig.add_shape(type="rect", x0=0, y0=20, x1=16.5, y1=80,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0)")
-            fig.add_shape(type="rect", x0=83.5, y0=20, x1=100, y1=80,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0)")
-
-            fig.add_shape(type="rect", x0=-2, y0=45, x1=0, y1=55,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0.2)")
-            fig.add_shape(type="rect", x0=100, y0=45, x1=102, y1=55,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0.2)")
+            # Penalty areas
+            fig.add_shape(type="rect", x0=0, y0=21.5, x1=16.5, y1=78.5, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="rect", x0=83.5, y0=21.5, x1=100, y1=78.5, line=line_style, fillcolor="rgba(0,0,0,0)")
+            # 6-yard boxes
+            fig.add_shape(type="rect", x0=0, y0=37, x1=5.5, y1=63, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="rect", x0=94.5, y0=37, x1=100, y1=63, line=line_style, fillcolor="rgba(0,0,0,0)")
+            # Penalty arcs (D)
+            fig.add_shape(type="path",
+                          path="M 16.5 42 Q 22.5 50 16.5 58", line=line_style)
+            fig.add_shape(type="path",
+                          path="M 83.5 42 Q 77.5 50 83.5 58", line=line_style)
+            # Penalty spots
+            fig.add_shape(type="circle", x0=10.5, y0=49.5, x1=11.5, y1=50.5, line=dict(width=0), fillcolor="white")
+            fig.add_shape(type="circle", x0=88.5, y0=49.5, x1=89.5, y1=50.5, line=dict(width=0), fillcolor="white")
+            # Goals (highlighted)
+            fig.add_shape(type="rect", x0=-1.8, y0=45.5, x1=0, y1=54.5, line=line_style, fillcolor="rgba(255,255,255,0.18)")
+            fig.add_shape(type="rect", x0=100, y0=45.5, x1=101.8, y1=54.5, line=line_style, fillcolor="rgba(255,255,255,0.18)")
+            # Corner arcs (visual cue)
+            for cx, cy in [(0, 0), (100, 0), (0, 100), (100, 100)]:
+                fig.add_shape(type="circle",
+                              x0=cx - 1.5, y0=cy - 1.5, x1=cx + 1.5, y1=cy + 1.5,
+                              line=line_style, fillcolor="rgba(0,0,0,0)")
 
             ball_tracking = metrics.get('ball_tracking', {})
             position_history = ball_tracking.get('position_history', [])
@@ -1490,72 +1555,143 @@ with tab2:
             max_x = max([p.get('x', 100) for p in position_history]) if position_history else 1280
             max_y = max([p.get('y', 100) for p in position_history]) if position_history else 720
 
+            # Bucket shots per team so each gets a single legend entry.
+            buckets = {
+                ('A', False): {'x': [], 'y': [], 'size': [], 'text': []},
+                ('B', False): {'x': [], 'y': [], 'size': [], 'text': []},
+                ('A', True):  {'x': [], 'y': [], 'size': [], 'text': []},
+                ('B', True):  {'x': [], 'y': [], 'size': [], 'text': []},
+            }
+
             for i, shot in enumerate(shot_events):
                 ball_pos = shot.get('ball_position', shot.get('position', shot.get('start_pos', [50, 50])))
                 raw_x = ball_pos[0] if isinstance(ball_pos, (list, tuple)) else 50
                 raw_y = ball_pos[1] if isinstance(ball_pos, (list, tuple)) else 50
                 x = (raw_x / max_x) * 100 if max_x > 0 else 50
-                y = (raw_y / max_y) * 100 if max_y > 0 else 50
-                y = 100 - y
+                y = 100 - ((raw_y / max_y) * 100 if max_y > 0 else 50)
 
                 is_goal = shot.get('is_goal', False)
                 team = shot.get('team', shot.get('shooter_team', 'A'))
+                if team not in ('A', 'B'):
+                    team = 'A'
 
-                color = '#fbbf24' if is_goal else team_a_color if team == 'A' else team_b_color
-                size = 20 if is_goal else 12
-                symbol = 'star' if is_goal else 'circle'
+                xg_value = float(shot.get('xg', shot.get('xG', shot.get('expected_goals', 0))) or 0)
+                # Marker size scales with xG (12 baseline -> ~32 for a 0.5+ chance).
+                size = 14 + min(xg_value * 36, 22)
+                if is_goal:
+                    size = max(size, 22)
 
                 shooter_id = shot.get('shooter_id', shot.get('player_id', 'Unknown'))
                 shooter_name = get_player_name(shooter_id, player_identities, tracks)
 
-                xg_value = shot.get('xg', shot.get('xG', shot.get('expected_goals', 0)))
+                hover = (
+                    f"<b>{'⚽ Goal' if is_goal else 'Shot'} #{i + 1}</b><br>"
+                    f"Shooter: {shooter_name}<br>"
+                    f"Team: {team_a if team == 'A' else team_b}<br>"
+                    f"xG: {xg_value:.2f}<br>"
+                    f"Distance: {shot.get('distance_to_goal_px', 0):.0f} px<br>"
+                    f"Angle: {shot.get('angle_to_goal_deg', 0):.1f}°<extra></extra>"
+                )
 
+                bucket = buckets[(team, is_goal)]
+                bucket['x'].append(x)
+                bucket['y'].append(y)
+                bucket['size'].append(size)
+                bucket['text'].append(hover)
+
+                # Trajectory hint: arrow from shot origin toward the opponent's goal.
+                target_x = 100 if team == 'A' else 0
+                fig.add_annotation(
+                    x=target_x, y=50, ax=x, ay=y,
+                    xref='x', yref='y', axref='x', ayref='y',
+                    showarrow=True, arrowhead=2, arrowwidth=1.4,
+                    arrowcolor=(team_a_color if team == 'A' else team_b_color),
+                    opacity=0.45,
+                )
+
+            # Render buckets with persistent legend entries.
+            legend_specs = [
+                (('A', False), f"{team_a} Shots", team_a_color, 'circle'),
+                (('B', False), f"{team_b} Shots", team_b_color, 'circle'),
+                (('A', True),  f"{team_a} Goals", '#fbbf24',     'star'),
+                (('B', True),  f"{team_b} Goals", '#fbbf24',     'star'),
+            ]
+            for key, label, color, symbol in legend_specs:
+                b = buckets[key]
                 fig.add_trace(go.Scatter(
-                    x=[x], y=[y],
+                    x=b['x'] or [None], y=b['y'] or [None],
                     mode='markers',
-                    marker=dict(size=size, color=color, symbol=symbol,
-                               line=dict(width=2, color='white')),
-                    name=f"{'Goal' if is_goal else 'Shot'} - {team}",
-                    hovertemplate=f"Shot by {shooter_name}<br>" +
-                                 f"xG: {xg_value:.2f}<br>" +
-                                 f"Distance: {shot.get('distance_to_goal_px', 0):.1f}px<br>" +
-                                 f"Angle: {shot.get('angle_to_goal_deg', 0):.1f}°<extra></extra>",
-                    showlegend=False
+                    marker=dict(
+                        size=b['size'] or [12],
+                        color=color, symbol=symbol,
+                        line=dict(width=2, color='rgba(255,255,255,0.9)'),
+                        opacity=0.92,
+                    ),
+                    name=label,
+                    hovertemplate=b['text'] or "",
+                    showlegend=True,
                 ))
 
-                fig.add_annotation(
-                    x=x, y=y,
-                    text=str(i + 1),
-                    showarrow=False,
-                    font=dict(size=10, color='white', family='Inter, system-ui, sans-serif'),
-                    yshift=-15
-                )
+            # Attacking-direction arrows along the touchline.
+            fig.add_annotation(x=22, y=-3.5, ax=2, ay=-3.5, xref='x', yref='y',
+                               axref='x', ayref='y', showarrow=True, arrowhead=3,
+                               arrowwidth=2, arrowcolor=team_a_color)
+            fig.add_annotation(x=11, y=-6.5, text=f"<b>{team_a} →</b>", showarrow=False,
+                               font=dict(size=11, color=team_a_color))
+            fig.add_annotation(x=78, y=-3.5, ax=98, ay=-3.5, xref='x', yref='y',
+                               axref='x', ayref='y', showarrow=True, arrowhead=3,
+                               arrowwidth=2, arrowcolor=team_b_color)
+            fig.add_annotation(x=89, y=-6.5, text=f"<b>← {team_b}</b>", showarrow=False,
+                               font=dict(size=11, color=team_b_color))
 
             fig.update_layout(
-                xaxis=dict(range=[-5, 105], showgrid=False, zeroline=False, visible=False),
-                yaxis=dict(range=[-5, 105], showgrid=False, zeroline=False, visible=False),
+                xaxis=dict(range=[-4, 104], showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(range=[-10, 104], showgrid=False, zeroline=False, visible=False,
+                           scaleanchor='x', scaleratio=0.66),
                 paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(34, 139, 34, 0.3)',
-                height=500,
-                margin=dict(l=0, r=0, t=0, b=0),
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=520,
+                margin=dict(l=10, r=10, t=10, b=10),
                 showlegend=True,
                 legend=dict(
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=0.01,
-                    bgcolor="rgba(0,0,0,0.5)",
-                    font=dict(color="white")
-                )
+                    orientation='h', yanchor='bottom', y=1.01,
+                    xanchor='center', x=0.5,
+                    bgcolor='rgba(15, 20, 25, 0.6)',
+                    bordercolor='rgba(255,255,255,0.1)', borderwidth=1,
+                    font=dict(color='#f1f5f9', size=12),
+                ),
             )
 
             st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("""
-            <div style="display: flex; gap: 24px; justify-content: center; margin-top: 16px;">
-                <span style="display: flex; align-items: center; gap: 8px;"><span style="color: #DA291C; font-size: 1.2rem;">●</span> Team A Shots</span>
-                <span style="display: flex; align-items: center; gap: 8px;"><span style="color: #60a5fa; font-size: 1.2rem;">●</span> Team B Shots</span>
-                <span style="display: flex; align-items: center; gap: 8px;"><span style="color: #fbbf24; font-size: 1.2rem;">G</span> Goals</span>
+            # Quick summary strip below the map.
+            total_shots = len(shot_events)
+            total_goals = sum(1 for s in shot_events if s.get('is_goal'))
+            shots_a = sum(1 for s in shot_events if s.get('team', s.get('shooter_team')) == 'A')
+            shots_b = total_shots - shots_a
+            total_xg = sum(float(s.get('xg', s.get('xG', s.get('expected_goals', 0))) or 0) for s in shot_events)
+            st.markdown(f"""
+            <div style="display: flex; gap: 16px; justify-content: center; margin-top: 14px; flex-wrap: wrap;">
+                <div style="background:#1a212c; border:1px solid #252d3d; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">TOTAL SHOTS</div>
+                    <div style="color:#f1f5f9; font-size:1.4rem; font-weight:700;">{total_shots}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid {team_a_color}55; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">{team_a.upper()}</div>
+                    <div style="color:{team_a_color}; font-size:1.4rem; font-weight:700;">{shots_a}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid {team_b_color}55; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">{team_b.upper()}</div>
+                    <div style="color:{team_b_color}; font-size:1.4rem; font-weight:700;">{shots_b}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid #fbbf2455; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">GOALS</div>
+                    <div style="color:#fbbf24; font-size:1.4rem; font-weight:700;">{total_goals}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid #34d39955; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">TOTAL xG</div>
+                    <div style="color:#34d399; font-size:1.4rem; font-weight:700;">{total_xg:.2f}</div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
         else:

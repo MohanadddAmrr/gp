@@ -202,9 +202,17 @@ def make_colored_heatmap(hm: np.ndarray, out_path: Path):
     
     # Normalize heatmap
     norm = (hm / hm.max() * 255).astype(np.uint8)
-    
+
     # Apply Gaussian blur for smoother, more professional look
-    norm_smooth = cv2.GaussianBlur(norm, (21, 21), 0)
+    norm_smooth = cv2.GaussianBlur(norm, (51, 51), 0)
+    # Re-normalize AFTER blur. Without this, blurring a sparse heatmap
+    # collapses peak values to <40 so the alpha-blend below makes the
+    # overlay nearly invisible against the green pitch — every demo
+    # heatmap rendered as a blank green field before this fix.
+    if norm_smooth.max() > 0:
+        norm_smooth = (
+            norm_smooth.astype(np.float32) / float(norm_smooth.max()) * 255.0
+        ).astype(np.uint8)
     
     # Create custom color map (blue -> cyan -> green -> yellow -> red)
     # This matches professional heatmap visualizations
@@ -459,7 +467,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                  enable_social: bool = False,
                  chunk_size_minutes: float = 0, memory_limit_percent: float = 80,
                  team_a_name: str = None, team_b_name: str = None,
-                 max_seconds: float = 0, tracker=None,
+                 max_seconds: float = 0, start_seconds: float = 0, tracker=None,
                  reid_layer=None, reid_classifier=None):
     """Process a single video file with optional integration features.
 
@@ -717,8 +725,14 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     
     # ── Chunked video processing setup ──────────────────────────
     _tmp_cap = cv2.VideoCapture(str(video_path))
-    total_frames = int(_tmp_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    video_total_frames = int(_tmp_cap.get(cv2.CAP_PROP_FRAME_COUNT))
     _tmp_cap.release()
+    # Optional seek: process from `start_seconds` into the source video.
+    start_frame_offset = int(max(start_seconds, 0) * fps)
+    start_frame_offset = min(start_frame_offset, max(video_total_frames - 1, 0))
+    if start_frame_offset > 0:
+        print(f"  Starting offset: {start_seconds:.1f}s -> frame {start_frame_offset}")
+    total_frames = video_total_frames - start_frame_offset
     if max_seconds > 0:
         max_frames = int(max_seconds * fps)
         total_frames = min(total_frames, max_frames)
@@ -728,7 +742,8 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
         chunk_frames = total_frames
 
     num_chunks = max(1, (total_frames + chunk_frames - 1) // chunk_frames)
-    chunk_state = {"raw_id_offset": 0, "chunk_idx": 0}
+    chunk_state = {"raw_id_offset": 0, "chunk_idx": 0,
+                   "start_frame_offset": start_frame_offset}
 
     def _chunked_frame_generator():
         """Yield YOLO Results objects, processing video in chunks to keep memory flat."""
@@ -754,10 +769,13 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
             else:
                 ending_positions = {}
 
-            # Open video, seek to start of this chunk
+            # Open video, seek to start of this chunk. Add start_frame_offset
+            # so chunk-relative frame indices map to absolute frames in the
+            # source video when --start-seconds is in effect.
             chunk_cap = cv2.VideoCapture(str(video_path))
-            if start_frame > 0:
-                chunk_cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            absolute_start = start_frame + chunk_state["start_frame_offset"]
+            if absolute_start > 0:
+                chunk_cap.set(cv2.CAP_PROP_POS_FRAMES, absolute_start)
 
             # Reset YOLO tracker state between chunks so ByteTrack starts fresh
             if chunk_idx > 0 and hasattr(model, 'predictor') and model.predictor is not None:
@@ -1737,6 +1755,8 @@ def main():
                         help='Warn if memory usage exceeds this %% of system RAM')
     parser.add_argument('--max-seconds', type=float, default=0,
                         help='Process only the first N seconds of the video (0 = whole video)')
+    parser.add_argument('--start-seconds', type=float, default=0,
+                        help='Seek into the video and start processing at this offset')
 
     args = parser.parse_args()
     
@@ -1825,6 +1845,7 @@ def main():
             chunk_size_minutes=args.chunk_size,
             memory_limit_percent=args.memory_limit,
             max_seconds=args.max_seconds,
+            start_seconds=args.start_seconds,
             tracker=tracker,
             reid_layer=reid_layer,
             reid_classifier=reid_classifier,
