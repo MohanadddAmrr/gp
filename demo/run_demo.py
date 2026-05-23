@@ -862,9 +862,9 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
 
     results = _chunked_frame_generator()
 
-    # Skip live display windows to conserve memory
-    # cv2.namedWindow("TactiVision - Video", cv2.WINDOW_NORMAL)
-    # cv2.namedWindow("TactiVision - Heatmap", cv2.WINDOW_NORMAL)
+    # Live display window
+    cv2.namedWindow("TactiVision Pro - Live Tracking", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("TactiVision Pro - Live Tracking", 1280, 720)
 
     last_known_ball_pos = None
     ball_seen = False
@@ -1161,9 +1161,63 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                     t
                 )
         
-        # Skip all frame rendering (drawing boxes, HUD, etc.) to conserve memory
-        # Annotations are only useful for live display which is disabled
-        del frame  # Free frame memory immediately
+        # ── Live display: draw bounding boxes and HUD ──────────────────
+        if frame is not None:
+            disp = cv2.resize(frame, (1280, 720))
+            sx = 1280 / width
+            sy = 720  / height
+
+            # Colour map: Team A = green, Team B = orange, ball = yellow, ref = grey
+            COLORS = {"A": (0, 200, 80), "B": (0, 120, 255),
+                      "ball": (0, 255, 255), "ref": (180, 180, 180), "?": (160, 160, 160)}
+
+            # Draw players
+            for pid, (x1, y1, x2, y2) in frame_player_bboxes.items():
+                team = frame_player_positions.get(pid, (0, 0, "?"))[2]
+                color = COLORS.get(team, COLORS["?"])
+                dx1, dy1 = int(x1 * sx), int(y1 * sy)
+                dx2, dy2 = int(x2 * sx), int(y2 * sy)
+                cv2.rectangle(disp, (dx1, dy1), (dx2, dy2), color, 2)
+                lbl = f"{'A' if team=='A' else 'B' if team=='B' else team} P{pid}"
+                (tw, th), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+                cv2.rectangle(disp, (dx1, dy1 - th - 4), (dx1 + tw + 4, dy1), color, -1)
+                cv2.putText(disp, lbl, (dx1 + 2, dy1 - 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA)
+
+            # Draw ball
+            if ball_box is not None:
+                bx1, by1, bx2, by2 = ball_box
+                cv2.rectangle(disp,
+                              (int(bx1 * sx), int(by1 * sy)),
+                              (int(bx2 * sx), int(by2 * sy)),
+                              COLORS["ball"], 2)
+                cv2.putText(disp, "Ball", (int(bx1 * sx), int(by1 * sy) - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, COLORS["ball"], 1, cv2.LINE_AA)
+
+            # HUD bar
+            cv2.rectangle(disp, (0, 0), (1280, 52), (0, 0, 0), -1)
+            pct = int(frame_idx / max(total_frames, 1) * 100)
+            cv2.putText(disp,
+                        f"TactiVision Pro  |  {team_a_name} vs {team_b_name}  |  "
+                        f"Frame {frame_idx}/{total_frames} ({pct}%)",
+                        (10, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+            count_a = sum(1 for _, (_, _, tm) in frame_player_positions.items() if tm == "A")
+            count_b = sum(1 for _, (_, _, tm) in frame_player_positions.items() if tm == "B")
+            cv2.putText(disp,
+                        f"{team_a_name}: {count_a} players    {team_b_name}: {count_b} players    "
+                        f"Possession: {'Team A' if current_team=='A' else 'Team B' if current_team=='B' else '-'}",
+                        (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (180, 220, 180), 1, cv2.LINE_AA)
+            # Progress bar at bottom
+            cv2.rectangle(disp, (0, 716), (1280, 720), (40, 40, 40), -1)
+            cv2.rectangle(disp, (0, 716), (int(1280 * pct / 100), 720), (0, 200, 80), -1)
+
+            cv2.imshow("TactiVision Pro - Live Tracking", disp)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:
+                print("  [Live display closed by user]")
+                cv2.destroyWindow("TactiVision Pro - Live Tracking")
+
+        del frame  # Free frame memory
     
     
     cv2.destroyAllWindows()
