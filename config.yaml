@@ -71,7 +71,7 @@ ball_tracking:
   # primary detector missed the ball. Off by default: on CPU it adds a
   # per-frame cost; enable when ball-detection rate matters more than speed.
   second_pass:
-    enabled: true
+    enabled: false
     weights: weights/rtdetr-l.pt
     confidence_threshold: 0.25
     crop_size: 640
@@ -368,7 +368,7 @@ team_colors:
   Leicester City: '#003090'
   Nottingham Forest: '#DD0000'
   Southampton: '#D71920'
-  Tottenham Hotspur: '#FFFFFF'
+  Tottenham Hotspur: '#FCE300'   # away kit worn in our footage is canary yellow, not white
   West Ham United: '#7A263A'
   Wolverhampton Wanderers: '#FDB913'
   Real Sociedad: '#003DA5'

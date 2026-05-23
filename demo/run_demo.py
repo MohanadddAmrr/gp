@@ -574,15 +574,22 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     _resolved_ta = team_a_name
     _resolved_tb = team_b_name
 
-    # Load team colors from config for any resolved team
+    # Load team colors from config for any resolved team.
+    # NOTE: ROOT is redefined at module-level to `demo/` (line ~165), so
+    # `ROOT / "config.yaml"` resolves to `demo/config.yaml` which doesn't
+    # exist — the bare `except` was silently swallowing the FileNotFoundError
+    # and leaving _team_colors_cfg empty. Use the project root explicitly.
     import yaml as _yaml
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
     _team_colors_cfg = {}
     try:
-        with open(ROOT / "config.yaml", "r", encoding="utf-8") as _cf:
+        with open(_PROJECT_ROOT / "config.yaml", "r", encoding="utf-8") as _cf:
             _cfg = _yaml.safe_load(_cf)
-        _team_colors_cfg = _cfg.get("team_colors", {})
-    except Exception:
-        pass
+        _team_colors_cfg = _cfg.get("team_colors", {}) or {}
+    except FileNotFoundError:
+        print(f"[!] config.yaml not found at {_PROJECT_ROOT / 'config.yaml'}; team colors disabled")
+    except Exception as _exc:
+        print(f"[!] Failed to read config.yaml: {_exc}; team colors disabled")
 
     # Path 1: Explicit team names
     if db_manager and _resolved_ta and _resolved_tb:

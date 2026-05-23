@@ -81,9 +81,59 @@ class JerseyColorClassifier:
             return None
         return self.COLOR_RANGES.get(color_name.lower())
 
-    def _hue_matches_color(self, hue: int, color_name: str) -> bool:
-        """Check if a hue value matches the expected color."""
-        ranges = self._get_hue_ranges_for_color(color_name)
+    @staticmethod
+    def _circular_mean_hue(hues) -> int:
+        """Circular mean of OpenCV hues (0-180). A linear mean/median on the
+        0/180 wrap is meaningless: Liverpool red samples at H=175 and H=5 are
+        both 'red', but np.median([170, 175, 178, 0, 3, 5]) returns ~87,
+        which is cyan-green. The circular calculation correctly returns ~0.
+        """
+        if hues is None or len(hues) == 0:
+            return 0
+        # Map cv2 hue 0..180 to a full 2pi cycle so 0 and 180 coincide
+        angles = np.asarray(hues, dtype=np.float64) * (np.pi / 90.0)
+        s = float(np.sin(angles).mean())
+        c = float(np.cos(angles).mean())
+        a = np.arctan2(s, c)
+        if a < 0:
+            a += 2.0 * np.pi
+        return int(a * 90.0 / np.pi) % 180
+
+    @staticmethod
+    def _hex_to_hsv(hex_str: str):
+        """Convert '#rrggbb' to OpenCV HSV tuple (H 0-180, S 0-255, V 0-255)."""
+        try:
+            h = hex_str.lstrip('#')
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            bgr = np.uint8([[[b, g, r]]])
+            hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+            return int(hsv[0, 0, 0]), int(hsv[0, 0, 1]), int(hsv[0, 0, 2])
+        except Exception:
+            return None
+
+    def _hue_matches_color(self, hue: int, color: str) -> bool:
+        """Check if a hue value matches the expected color.
+
+        Accepts either a color name (e.g. 'red') or a hex code ('#c8102e').
+        Hex inputs are converted to HSV; matches require the hue to be within
+        ~18 degrees of the target. Low-saturation hex (white/grey/black) is
+        not matched on hue — saturation/value classification handles those.
+        """
+        if not color:
+            return False
+        # Hex-code path: this is what the roster/DB actually passes in
+        if color.startswith('#'):
+            target = self._hex_to_hsv(color)
+            if target is None:
+                return False
+            h_target, s_target, _ = target
+            if s_target < 40:
+                return False  # white/grey/black — no meaningful hue
+            # Cyclic distance on the 0-180 OpenCV hue circle
+            diff = min((hue - h_target) % 180, (h_target - hue) % 180)
+            return diff <= 18
+        # Name-keyed path (legacy / direct color-name input)
+        ranges = self._get_hue_ranges_for_color(color)
         if ranges is None:
             return False
         for low, high in ranges:
@@ -150,7 +200,7 @@ class JerseyColorClassifier:
         if self.team_colors and player_id in self._color_samples:
             samples = self._color_samples[player_id]
             if len(samples) >= 3:
-                median_hue = int(np.median(samples))
+                median_hue = self._circular_mean_hue(samples)
                 
                 # Check against each team's expected color
                 for team, color in self.team_colors.items():
@@ -164,7 +214,7 @@ class JerseyColorClassifier:
             return None
 
         pids = list(eligible.keys())
-        medians = [int(np.median(eligible[p])) for p in pids]
+        medians = [self._circular_mean_hue(eligible[p]) for p in pids]
         hue_rad = np.array(medians, dtype=np.float32) * np.pi / 90.0
         hue_2d = np.column_stack([np.cos(hue_rad), np.sin(hue_rad)]).astype(np.float32)
 
@@ -225,7 +275,7 @@ class JerseyColorClassifier:
         player_hues = {}
         for pid, hues in self._color_samples.items():
             if len(hues) >= 3:
-                player_hues[pid] = int(np.median(hues))
+                player_hues[pid] = self._circular_mean_hue(hues)
 
         if len(player_hues) < 4:
             return {}
@@ -241,22 +291,28 @@ class JerseyColorClassifier:
             avg_sat = np.mean(self._saturation_samples.get(pid, [100]))
             avg_val = np.mean(self._value_samples.get(pid, [128]))
             
-            # Check for referee characteristics
+            # Check for referee characteristics. CRITICAL: if the player's
+            # hue matches one of the configured TEAM colors (e.g. an away team
+            # wearing yellow), they're a team player, not a referee. Without
+            # this guard, yellow-kit away teams collapsed entirely into 'REF'
+            # because yellow is the most common referee colour.
+            matches_team_color = bool(self.team_colors) and any(
+                self._hue_matches_color(hue, c) for c in self.team_colors.values()
+            )
+
             is_referee = False
-            
-            # Yellow referee jersey (most common)
-            if (self.REFEREE_YELLOW_HUE_MIN <= hue <= self.REFEREE_YELLOW_HUE_MAX and
-                avg_sat > 100 and avg_val > 150):
-                is_referee = True
-            
-            # Black referee jersey (low saturation AND low value)
-            elif avg_sat < self.REFEREE_SATURATION_LOW and avg_val < self.REFEREE_VALUE_LOW:
-                is_referee = True
-            
-            # Bright fluorescent (high saturation yellow-green)
-            elif (30 <= hue <= 50 and avg_sat > 180 and avg_val > 200):
-                is_referee = True
-                
+            if not matches_team_color:
+                # Yellow referee jersey (most common)
+                if (self.REFEREE_YELLOW_HUE_MIN <= hue <= self.REFEREE_YELLOW_HUE_MAX and
+                    avg_sat > 100 and avg_val > 150):
+                    is_referee = True
+                # Black referee jersey (low saturation AND low value)
+                elif avg_sat < self.REFEREE_SATURATION_LOW and avg_val < self.REFEREE_VALUE_LOW:
+                    is_referee = True
+                # Bright fluorescent (high saturation yellow-green)
+                elif (30 <= hue <= 50 and avg_sat > 180 and avg_val > 200):
+                    is_referee = True
+
             if is_referee:
                 self._team_assignments[pid] = 'REF'
         
