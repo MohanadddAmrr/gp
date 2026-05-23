@@ -64,6 +64,15 @@ from services.pitch_transform import PitchTransform
 from services.ball_tracker import BallTracker
 from services.event_detector import EventDetector
 
+# --- Dashboard runtime defaults ---
+PLOTLY_PALETTE = ["#DA291C", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa"]
+
+# Ensure session state keys exist (helps when reloading in Streamlit)
+if 'selected_video' not in st.session_state:
+    st.session_state['selected_video'] = None
+if 'selected_matches' not in st.session_state:
+    st.session_state['selected_matches'] = []
+
 # ============================================================
 # FOOTBALL-DATA.ORG API INTEGRATION
 # ============================================================
@@ -611,6 +620,33 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
+    /* Re-skin the white Streamlit top bar (which contains the hamburger
+       menu, Deploy button etc.) to match the dark dashboard background.
+       Without this, every page renders with a glaring white strip across
+       the very top that breaks the dark theme. */
+    header[data-testid="stHeader"],
+    div[data-testid="stToolbar"],
+    div[data-testid="stDecoration"] {
+        background-color: #0f1419 !important;
+        background: #0f1419 !important;
+    }
+    header[data-testid="stHeader"] * {
+        color: #cbd5e1 !important;
+    }
+    /* Streamlit injects a small purple/red decoration bar at the top —
+       suppress it so the colour bar across the page is only ours. */
+    div[data-testid="stDecoration"] {
+        display: none !important;
+    }
+    /* Pull the main app content snug against the top so the re-skinned
+       header is the only thing above the title card. */
+    div[data-testid="stAppViewContainer"] > .main {
+        padding-top: 0 !important;
+    }
+    .block-container {
+        padding-top: 1.5rem !important;
+    }
+
     /* Smooth scrolling */
     html {
         scroll-behavior: smooth;
@@ -669,8 +705,12 @@ def load_metrics(video_dir: Path) -> Dict:
     """Load metrics from video output directory."""
     metrics_file = video_dir / "metrics.json"
     if metrics_file.exists():
-        with open(metrics_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(metrics_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return {}
     return {}
 
 def get_video_directories():
@@ -679,8 +719,97 @@ def get_video_directories():
     if not output_base.exists():
         return []
     
-    dirs = [d for d in output_base.iterdir() if d.is_dir()]
+    dirs = []
+    for d in output_base.iterdir():
+        if not d.is_dir():
+            continue
+        try:
+            d.stat()
+            dirs.append(d)
+        except OSError:
+            continue
     return sorted(dirs, key=lambda x: x.stat().st_mtime, reverse=True)
+
+def _safe_number(value: Any, default: float = 0.0) -> float:
+    """Convert common metric values to a float safely."""
+    try:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.strip().replace('%', '')
+            return float(cleaned) if cleaned else default
+    except (TypeError, ValueError):
+        return default
+    return default
+
+def _format_comparison_value(value: Any) -> Any:
+    """Format comparison table values without losing non-numeric labels."""
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        return round(float(value), 1)
+    return value if value not in [None, ""] else "N/A"
+
+def _extract_total_goals(match_metrics: Dict) -> float:
+    """Return the most reliable total-goals value available for a match."""
+    score = match_metrics.get('score', {}) if isinstance(match_metrics.get('score'), dict) else {}
+    score_goals = _safe_number(score.get('A')) + _safe_number(score.get('B'))
+    if score_goals > 0:
+        return score_goals
+
+    shot_stats = match_metrics.get('shot_detection', {}) if isinstance(match_metrics.get('shot_detection'), dict) else {}
+    if _safe_number(shot_stats.get('goals')) > 0:
+        return _safe_number(shot_stats.get('goals'))
+
+    xg_stats = match_metrics.get('xg_analysis', {}) if isinstance(match_metrics.get('xg_analysis'), dict) else {}
+    return _safe_number(xg_stats.get('actual_goals'))
+
+def _extract_total_passes(match_metrics: Dict) -> float:
+    """Return a stable total-pass count for a match."""
+    pass_stats = match_metrics.get('pass_detection', {}) if isinstance(match_metrics.get('pass_detection'), dict) else {}
+    total_passes = _safe_number(pass_stats.get('total_passes'))
+    if total_passes > 0:
+        return total_passes
+    team_passes = pass_stats.get('team_passes', {}) if isinstance(pass_stats.get('team_passes'), dict) else {}
+    return _safe_number(team_passes.get('A')) + _safe_number(team_passes.get('B'))
+
+def _extract_completed_passes(match_metrics: Dict) -> float:
+    """Return completed passes or derive them from accuracy when needed."""
+    pass_stats = match_metrics.get('pass_detection', {}) if isinstance(match_metrics.get('pass_detection'), dict) else {}
+    completed = _safe_number(pass_stats.get('completed_passes'))
+    if completed > 0:
+        return completed
+
+    total_passes = _extract_total_passes(match_metrics)
+    accuracy = _safe_number(pass_stats.get('pass_accuracy'))
+    return round(total_passes * accuracy / 100.0) if total_passes > 0 and accuracy > 0 else 0.0
+
+def _extract_intercepted_passes(match_metrics: Dict) -> float:
+    """Return intercepted passes when the field is present."""
+    pass_stats = match_metrics.get('pass_detection', {}) if isinstance(match_metrics.get('pass_detection'), dict) else {}
+    return _safe_number(pass_stats.get('intercepted_passes'))
+
+def _extract_total_shots(match_metrics: Dict) -> float:
+    """Return total shots for a match."""
+    shot_stats = match_metrics.get('shot_detection', {}) if isinstance(match_metrics.get('shot_detection'), dict) else {}
+    total_shots = _safe_number(shot_stats.get('total_shots'))
+    if total_shots > 0:
+        return total_shots
+    xg_stats = match_metrics.get('xg_analysis', {}) if isinstance(match_metrics.get('xg_analysis'), dict) else {}
+    return _safe_number(xg_stats.get('shots'))
+
+def _extract_total_xg(match_metrics: Dict) -> float:
+    """Return total xG for a match."""
+    xg_stats = match_metrics.get('xg_analysis', {}) if isinstance(match_metrics.get('xg_analysis'), dict) else {}
+    total_xg = _safe_number(xg_stats.get('total_xg'))
+    if total_xg > 0:
+        return total_xg
+    shot_stats = match_metrics.get('shot_detection', {}) if isinstance(match_metrics.get('shot_detection'), dict) else {}
+    return _safe_number(shot_stats.get('xg'))
 
 def format_duration(seconds: float) -> str:
     """Format duration in seconds to mm:ss."""
@@ -852,14 +981,23 @@ with st.sidebar:
                 events = (m.get('pass_detection', {}).get('total_passes', 0)
                           + m.get('shot_detection', {}).get('total_shots', 0))
                 display_name = f"{t_a} vs {t_b}"
+                # Two output folders can share the same team names (e.g. a
+                # "_backup" run). Disambiguate by folder name so the newer
+                # run is not silently overwritten in the selector.
+                if display_name in video_options:
+                    display_name = f"{display_name} ({d.name})"
                 video_options[display_name] = {"dir": d, "duration": dur, "events": events}
 
     if video_options:
         selected_video = st.selectbox(
             "Select Match",
             options=list(video_options.keys()),
-            index=0 if video_options else None
+            index=0 if video_options else None,
+            key="selectbox_match"
         )
+
+        # Persist selection in session_state so all tabs can read it
+        st.session_state['selected_video'] = selected_video
 
         if selected_video:
             sel = video_options[selected_video]
@@ -1139,10 +1277,11 @@ st.markdown(f"""
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
     "Overview", "Shooting", "Passing", "Physical", "Tactical",
     "xG & Analytics", "Heatmaps", "Highlights", "Database", "Settings",
-    "AI Recommendations", "Player Performance", "Match Comparison"
+    "AI Recommendations", "Player Performance", "Match Comparison",
+    "🌐 Live Match Data", "Generate Report", "Roster Management"
 ])
 
 # ============================================================
@@ -1170,9 +1309,21 @@ with tab1:
         detected_sprints = sprint_stats.get('total_sprints', 0)
         total_sprints = detected_sprints if detected_sprints > 0 else expected_sprints
 
+        # "Players" should reflect unique players on the pitch, not the raw
+        # tracking-ID count (which inflates to 100+ from ByteTrack re-acquires).
+        # Prefer the canonical count from metrics; cap at 22 (full match squad)
+        # so an obviously inflated number never reaches the user-facing tile.
+        canonical_n = metrics.get(
+            'num_players',
+            metrics.get('tracking_quality', {}).get('canonical_players', len(actual_players))
+        )
+        unique_named = len({(v.get('team'), v.get('number')) for v in player_identities.values()
+                            if v.get('name') and v.get('team') in ('A', 'B')})
+        players_display = min(max(canonical_n, unique_named), 22)
+
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
-            st.metric("Players", len(actual_players))
+            st.metric("Players", players_display, delta=f"{unique_named} identified", delta_color="off")
         with col2:
             st.metric("Possession", f"{poss_pct.get('A', 0):.0f}%", delta=f"vs {poss_pct.get('B', 0):.0f}%", delta_color="off")
         with col3:
@@ -1352,25 +1503,51 @@ with tab2:
         if shot_events:
             fig = go.Figure()
 
-            # Add pitch outline
-            fig.add_shape(type="rect", x0=0, y0=0, x1=100, y1=100,
-                         line=dict(color="white", width=2), fillcolor="rgba(34, 139, 34, 0.3)")
+            # ── Pitch background — layered green stripes for a broadcast look ──
+            stripe_top = "rgba(28, 110, 38, 0.55)"
+            stripe_bot = "rgba(22, 92, 32, 0.55)"
+            n_stripes = 10
+            for k in range(n_stripes):
+                y_lo = k * (100.0 / n_stripes)
+                y_hi = (k + 1) * (100.0 / n_stripes)
+                fig.add_shape(
+                    type="rect", x0=0, y0=y_lo, x1=100, y1=y_hi,
+                    line=dict(width=0),
+                    fillcolor=stripe_top if k % 2 == 0 else stripe_bot,
+                    layer="below",
+                )
 
-            fig.add_shape(type="line", x0=50, y0=0, x1=50, y1=100,
-                         line=dict(color="white", width=2))
+            line_style = dict(color="rgba(255,255,255,0.85)", width=2)
 
-            fig.add_shape(type="circle", x0=40, y0=40, x1=60, y1=60,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0)")
+            # Pitch outline + halfway line
+            fig.add_shape(type="rect", x0=0, y0=0, x1=100, y1=100, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="line", x0=50, y0=0, x1=50, y1=100, line=line_style)
+            # Center circle + spot
+            fig.add_shape(type="circle", x0=41, y0=41, x1=59, y1=59, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="circle", x0=49.4, y0=49.4, x1=50.6, y1=50.6, line=dict(width=0), fillcolor="white")
 
-            fig.add_shape(type="rect", x0=0, y0=20, x1=16.5, y1=80,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0)")
-            fig.add_shape(type="rect", x0=83.5, y0=20, x1=100, y1=80,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0)")
-
-            fig.add_shape(type="rect", x0=-2, y0=45, x1=0, y1=55,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0.2)")
-            fig.add_shape(type="rect", x0=100, y0=45, x1=102, y1=55,
-                         line=dict(color="white", width=2), fillcolor="rgba(255,255,255,0.2)")
+            # Penalty areas
+            fig.add_shape(type="rect", x0=0, y0=21.5, x1=16.5, y1=78.5, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="rect", x0=83.5, y0=21.5, x1=100, y1=78.5, line=line_style, fillcolor="rgba(0,0,0,0)")
+            # 6-yard boxes
+            fig.add_shape(type="rect", x0=0, y0=37, x1=5.5, y1=63, line=line_style, fillcolor="rgba(0,0,0,0)")
+            fig.add_shape(type="rect", x0=94.5, y0=37, x1=100, y1=63, line=line_style, fillcolor="rgba(0,0,0,0)")
+            # Penalty arcs (D)
+            fig.add_shape(type="path",
+                          path="M 16.5 42 Q 22.5 50 16.5 58", line=line_style)
+            fig.add_shape(type="path",
+                          path="M 83.5 42 Q 77.5 50 83.5 58", line=line_style)
+            # Penalty spots
+            fig.add_shape(type="circle", x0=10.5, y0=49.5, x1=11.5, y1=50.5, line=dict(width=0), fillcolor="white")
+            fig.add_shape(type="circle", x0=88.5, y0=49.5, x1=89.5, y1=50.5, line=dict(width=0), fillcolor="white")
+            # Goals (highlighted)
+            fig.add_shape(type="rect", x0=-1.8, y0=45.5, x1=0, y1=54.5, line=line_style, fillcolor="rgba(255,255,255,0.18)")
+            fig.add_shape(type="rect", x0=100, y0=45.5, x1=101.8, y1=54.5, line=line_style, fillcolor="rgba(255,255,255,0.18)")
+            # Corner arcs (visual cue)
+            for cx, cy in [(0, 0), (100, 0), (0, 100), (100, 100)]:
+                fig.add_shape(type="circle",
+                              x0=cx - 1.5, y0=cy - 1.5, x1=cx + 1.5, y1=cy + 1.5,
+                              line=line_style, fillcolor="rgba(0,0,0,0)")
 
             ball_tracking = metrics.get('ball_tracking', {})
             position_history = ball_tracking.get('position_history', [])
@@ -1378,72 +1555,143 @@ with tab2:
             max_x = max([p.get('x', 100) for p in position_history]) if position_history else 1280
             max_y = max([p.get('y', 100) for p in position_history]) if position_history else 720
 
+            # Bucket shots per team so each gets a single legend entry.
+            buckets = {
+                ('A', False): {'x': [], 'y': [], 'size': [], 'text': []},
+                ('B', False): {'x': [], 'y': [], 'size': [], 'text': []},
+                ('A', True):  {'x': [], 'y': [], 'size': [], 'text': []},
+                ('B', True):  {'x': [], 'y': [], 'size': [], 'text': []},
+            }
+
             for i, shot in enumerate(shot_events):
                 ball_pos = shot.get('ball_position', shot.get('position', shot.get('start_pos', [50, 50])))
                 raw_x = ball_pos[0] if isinstance(ball_pos, (list, tuple)) else 50
                 raw_y = ball_pos[1] if isinstance(ball_pos, (list, tuple)) else 50
                 x = (raw_x / max_x) * 100 if max_x > 0 else 50
-                y = (raw_y / max_y) * 100 if max_y > 0 else 50
-                y = 100 - y
+                y = 100 - ((raw_y / max_y) * 100 if max_y > 0 else 50)
 
                 is_goal = shot.get('is_goal', False)
                 team = shot.get('team', shot.get('shooter_team', 'A'))
+                if team not in ('A', 'B'):
+                    team = 'A'
 
-                color = '#fbbf24' if is_goal else team_a_color if team == 'A' else team_b_color
-                size = 20 if is_goal else 12
-                symbol = 'star' if is_goal else 'circle'
+                xg_value = float(shot.get('xg', shot.get('xG', shot.get('expected_goals', 0))) or 0)
+                # Marker size scales with xG (12 baseline -> ~32 for a 0.5+ chance).
+                size = 14 + min(xg_value * 36, 22)
+                if is_goal:
+                    size = max(size, 22)
 
                 shooter_id = shot.get('shooter_id', shot.get('player_id', 'Unknown'))
                 shooter_name = get_player_name(shooter_id, player_identities, tracks)
 
-                xg_value = shot.get('xg', shot.get('xG', shot.get('expected_goals', 0)))
+                hover = (
+                    f"<b>{'⚽ Goal' if is_goal else 'Shot'} #{i + 1}</b><br>"
+                    f"Shooter: {shooter_name}<br>"
+                    f"Team: {team_a if team == 'A' else team_b}<br>"
+                    f"xG: {xg_value:.2f}<br>"
+                    f"Distance: {shot.get('distance_to_goal_px', 0):.0f} px<br>"
+                    f"Angle: {shot.get('angle_to_goal_deg', 0):.1f}°<extra></extra>"
+                )
 
+                bucket = buckets[(team, is_goal)]
+                bucket['x'].append(x)
+                bucket['y'].append(y)
+                bucket['size'].append(size)
+                bucket['text'].append(hover)
+
+                # Trajectory hint: arrow from shot origin toward the opponent's goal.
+                target_x = 100 if team == 'A' else 0
+                fig.add_annotation(
+                    x=target_x, y=50, ax=x, ay=y,
+                    xref='x', yref='y', axref='x', ayref='y',
+                    showarrow=True, arrowhead=2, arrowwidth=1.4,
+                    arrowcolor=(team_a_color if team == 'A' else team_b_color),
+                    opacity=0.45,
+                )
+
+            # Render buckets with persistent legend entries.
+            legend_specs = [
+                (('A', False), f"{team_a} Shots", team_a_color, 'circle'),
+                (('B', False), f"{team_b} Shots", team_b_color, 'circle'),
+                (('A', True),  f"{team_a} Goals", '#fbbf24',     'star'),
+                (('B', True),  f"{team_b} Goals", '#fbbf24',     'star'),
+            ]
+            for key, label, color, symbol in legend_specs:
+                b = buckets[key]
                 fig.add_trace(go.Scatter(
-                    x=[x], y=[y],
+                    x=b['x'] or [None], y=b['y'] or [None],
                     mode='markers',
-                    marker=dict(size=size, color=color, symbol=symbol,
-                               line=dict(width=2, color='white')),
-                    name=f"{'Goal' if is_goal else 'Shot'} - {team}",
-                    hovertemplate=f"Shot by {shooter_name}<br>" +
-                                 f"xG: {xg_value:.2f}<br>" +
-                                 f"Distance: {shot.get('distance_to_goal_px', 0):.1f}px<br>" +
-                                 f"Angle: {shot.get('angle_to_goal_deg', 0):.1f}°<extra></extra>",
-                    showlegend=False
+                    marker=dict(
+                        size=b['size'] or [12],
+                        color=color, symbol=symbol,
+                        line=dict(width=2, color='rgba(255,255,255,0.9)'),
+                        opacity=0.92,
+                    ),
+                    name=label,
+                    hovertemplate=b['text'] or "",
+                    showlegend=True,
                 ))
 
-                fig.add_annotation(
-                    x=x, y=y,
-                    text=str(i + 1),
-                    showarrow=False,
-                    font=dict(size=10, color='white', family='Inter, system-ui, sans-serif'),
-                    yshift=-15
-                )
+            # Attacking-direction arrows along the touchline.
+            fig.add_annotation(x=22, y=-3.5, ax=2, ay=-3.5, xref='x', yref='y',
+                               axref='x', ayref='y', showarrow=True, arrowhead=3,
+                               arrowwidth=2, arrowcolor=team_a_color)
+            fig.add_annotation(x=11, y=-6.5, text=f"<b>{team_a} →</b>", showarrow=False,
+                               font=dict(size=11, color=team_a_color))
+            fig.add_annotation(x=78, y=-3.5, ax=98, ay=-3.5, xref='x', yref='y',
+                               axref='x', ayref='y', showarrow=True, arrowhead=3,
+                               arrowwidth=2, arrowcolor=team_b_color)
+            fig.add_annotation(x=89, y=-6.5, text=f"<b>← {team_b}</b>", showarrow=False,
+                               font=dict(size=11, color=team_b_color))
 
             fig.update_layout(
-                xaxis=dict(range=[-5, 105], showgrid=False, zeroline=False, visible=False),
-                yaxis=dict(range=[-5, 105], showgrid=False, zeroline=False, visible=False),
+                xaxis=dict(range=[-4, 104], showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(range=[-10, 104], showgrid=False, zeroline=False, visible=False,
+                           scaleanchor='x', scaleratio=0.66),
                 paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(34, 139, 34, 0.3)',
-                height=500,
-                margin=dict(l=0, r=0, t=0, b=0),
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=520,
+                margin=dict(l=10, r=10, t=10, b=10),
                 showlegend=True,
                 legend=dict(
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=0.01,
-                    bgcolor="rgba(0,0,0,0.5)",
-                    font=dict(color="white")
-                )
+                    orientation='h', yanchor='bottom', y=1.01,
+                    xanchor='center', x=0.5,
+                    bgcolor='rgba(15, 20, 25, 0.6)',
+                    bordercolor='rgba(255,255,255,0.1)', borderwidth=1,
+                    font=dict(color='#f1f5f9', size=12),
+                ),
             )
 
             st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("""
-            <div style="display: flex; gap: 24px; justify-content: center; margin-top: 16px;">
-                <span style="display: flex; align-items: center; gap: 8px;"><span style="color: #DA291C; font-size: 1.2rem;">●</span> Team A Shots</span>
-                <span style="display: flex; align-items: center; gap: 8px;"><span style="color: #60a5fa; font-size: 1.2rem;">●</span> Team B Shots</span>
-                <span style="display: flex; align-items: center; gap: 8px;"><span style="color: #fbbf24; font-size: 1.2rem;">G</span> Goals</span>
+            # Quick summary strip below the map.
+            total_shots = len(shot_events)
+            total_goals = sum(1 for s in shot_events if s.get('is_goal'))
+            shots_a = sum(1 for s in shot_events if s.get('team', s.get('shooter_team')) == 'A')
+            shots_b = total_shots - shots_a
+            total_xg = sum(float(s.get('xg', s.get('xG', s.get('expected_goals', 0))) or 0) for s in shot_events)
+            st.markdown(f"""
+            <div style="display: flex; gap: 16px; justify-content: center; margin-top: 14px; flex-wrap: wrap;">
+                <div style="background:#1a212c; border:1px solid #252d3d; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">TOTAL SHOTS</div>
+                    <div style="color:#f1f5f9; font-size:1.4rem; font-weight:700;">{total_shots}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid {team_a_color}55; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">{team_a.upper()}</div>
+                    <div style="color:{team_a_color}; font-size:1.4rem; font-weight:700;">{shots_a}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid {team_b_color}55; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">{team_b.upper()}</div>
+                    <div style="color:{team_b_color}; font-size:1.4rem; font-weight:700;">{shots_b}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid #fbbf2455; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">GOALS</div>
+                    <div style="color:#fbbf24; font-size:1.4rem; font-weight:700;">{total_goals}</div>
+                </div>
+                <div style="background:#1a212c; border:1px solid #34d39955; border-radius:10px; padding:10px 18px; min-width:120px; text-align:center;">
+                    <div style="color:#94a3b8; font-size:0.75rem; letter-spacing:0.06em;">TOTAL xG</div>
+                    <div style="color:#34d399; font-size:1.4rem; font-weight:700;">{total_xg:.2f}</div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -2668,432 +2916,100 @@ with tab10:
 
 with tab11:
     try:
-        st.markdown('<div class="section-header" style="color: #cbd5e1 !important; font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #DA291C; display: flex; align-items: center; gap: 10px;">AI Tactical Recommendations</div>', unsafe_allow_html=True)
-        st.caption("Intelligent tactical suggestions based on video analysis data")
+        from services.recommendation_engine import TacticalRecommendationEngine
 
-        ai_recommendations = metrics.get("ai_recommendations", [])
+        st.markdown('<div class="section-header" style="color: #cbd5e1 !important; font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #DA291C; display: flex; align-items: center; gap: 10px;">🤖 AI Tactical Recommendations</div>', unsafe_allow_html=True)
+        st.caption("Multi-signal analysis — each recommendation is backed by 3+ match statistics, not guesswork.")
 
-        # Get match-specific context for recommendations
-        match_duration = metrics.get('duration_minutes', 90)
-        possession_data = metrics.get('possession', {})
-        pass_data = metrics.get('pass_detection', {})
-        shot_data = metrics.get('shot_detection', {})
-        tactical_data = metrics.get('tactical_analysis', {})
+        # ── Run the engine ───────────────────────────────────────────────
+        _engine = TacticalRecommendationEngine()
+        _recs   = _engine.analyze(metrics, team_a=team_a, team_b=team_b)
 
-        # Generate dynamic match-specific recommendations based on actual match patterns
-        team_a_poss = possession_data.get('team_possession_percentage', {}).get('A', 50)
-        team_b_poss = possession_data.get('team_possession_percentage', {}).get('B', 50)
-        total_passes = pass_data.get('total_passes', 0)
-        pass_accuracy = pass_data.get('pass_accuracy', 75)
-        total_shots = shot_data.get('total_shots', 0)
-        shots_team_a = shot_data.get('team_shots', {}).get('A', 0)
-        shots_team_b = shot_data.get('team_shots', {}).get('B', 0)
-        pressing_data = tactical_data.get('pressing_intensity', {})
-        pressing_a = pressing_data.get('A', 0)
-        pressing_b = pressing_data.get('B', 0)
-        xg_data = metrics.get('xg_analysis', {})
-        team_xg = xg_data.get('team_comparison', {})
-        xg_a = team_xg.get('A', {}).get('xg', 0)
-        xg_b = team_xg.get('B', {}).get('xg', 0)
-        goals_a = team_xg.get('A', {}).get('goals', 0)
-        goals_b = team_xg.get('B', {}).get('goals', 0)
-        formations = tactical_data.get('current_formations', {})
-        formation_a = formations.get('A', '4-3-3')
-        formation_b = formations.get('B', '4-3-3')
-        dribbles = tactical_data.get('dribbles', {})
-        dribble_success = dribbles.get('success_rate', 50)
-        offsides = tactical_data.get('offsides', {})
-        confirmed_offsides = offsides.get('confirmed_offsides', 0)
+        # ── Summary bar ──────────────────────────────────────────────────
+        _high   = sum(1 for r in _recs if r.priority in ("CRITICAL", "HIGH"))
+        _avg_cf = sum(r.confidence for r in _recs) / len(_recs) if _recs else 0
 
-        # Get player tracks for additional analysis
-        tracks = metrics.get('tracks', [])
-        actual_tracks = [t for t in tracks if t.get('team') in ['A', 'B']]
-        team_a_tracks = [t for t in actual_tracks if t.get('team') == 'A']
-        team_b_tracks = [t for t in actual_tracks if t.get('team') == 'B']
-
-        # Calculate team-specific metrics
-        avg_speed_a = np.mean([t.get('avg_speed_mps', 0) for t in team_a_tracks]) if team_a_tracks else 0
-        avg_speed_b = np.mean([t.get('avg_speed_mps', 0) for t in team_b_tracks]) if team_b_tracks else 0
-        total_distance_a = sum(t.get('total_distance_m', 0) for t in team_a_tracks)
-        total_distance_b = sum(t.get('total_distance_m', 0) for t in team_b_tracks)
-
-        match_specific_recs = []
-
-        # Dynamic recommendation based on possession imbalance
-        poss_diff = abs(team_a_poss - team_b_poss)
-        if poss_diff > 15:
-            dominant_team = team_a if team_a_poss > team_b_poss else team_b
-            trailing_team = team_b if team_a_poss > team_b_poss else team_a
-            dominant_poss = max(team_a_poss, team_b_poss)
-            trailing_poss = min(team_a_poss, team_b_poss)
-
-            # For trailing team: improve possession
-            match_specific_recs.append({
-                'id': f'REC-POSS-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'HIGH' if poss_diff > 20 else 'MEDIUM',
-                'category': 'possession',
-                'title': f'{trailing_team}: Improve Ball Retention',
-                'description': f'{trailing_team} has only {trailing_poss:.1f}% possession vs {dominant_poss:.1f}% for {dominant_team}. Focus on shorter passing chains and better positional support.',
-                'reasoning': f'Large possession gap ({poss_diff:.1f}%) indicates {trailing_team} is struggling to control the game tempo.',
-                'expected_outcome': f'Reduce possession gap to under 10% within 15 minutes',
-                'confidence_score': min(0.9, 0.7 + poss_diff / 100),
-                'target_team': 'B' if team_a_poss > team_b_poss else 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Dynamic recommendation based on xG efficiency
-        if xg_a > 0 and goals_a < xg_a * 0.8:
-            underperforming = team_a
-            xg_diff = xg_a - goals_a
-            match_specific_recs.append({
-                'id': f'REC-XG-A-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'HIGH' if xg_diff > 1.0 else 'MEDIUM',
-                'category': 'attacking',
-                'title': f'{underperforming}: Improve Finishing',
-                'description': f'{underperforming} has {xg_a:.2f} xG but only {goals_a} goals. Working on shot quality and composure in front of goal.',
-                'reasoning': f'Underperforming xG by {xg_diff:.2f} indicates poor finishing or strong opponent goalkeeping.',
-                'expected_outcome': 'Convert high-quality chances more consistently',
-                'confidence_score': min(0.88, 0.6 + xg_diff / 3),
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'medium'
-            })
-
-        if xg_b > 0 and goals_b < xg_b * 0.8:
-            underperforming = team_b
-            xg_diff = xg_b - goals_b
-            match_specific_recs.append({
-                'id': f'REC-XG-B-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'HIGH' if xg_diff > 1.0 else 'MEDIUM',
-                'category': 'attacking',
-                'title': f'{underperforming}: Improve Finishing',
-                'description': f'{underperforming} has {xg_b:.2f} xG but only {goals_b} goals. Working on shot quality and composure in front of goal.',
-                'reasoning': f'Underperforming xG by {xg_diff:.2f} indicates poor finishing or strong opponent goalkeeping.',
-                'expected_outcome': 'Convert high-quality chances more consistently',
-                'confidence_score': min(0.88, 0.6 + xg_diff / 3),
-                'target_team': 'B',
-                'actionable': True,
-                'risk_level': 'medium'
-            })
-
-        # Dynamic recommendation based on pressing intensity comparison
-        press_diff = abs(pressing_a - pressing_b)
-        if press_diff > 20:
-            high_press_team = team_a if pressing_a > pressing_b else team_b
-            low_press_team = team_b if pressing_a > pressing_b else team_b
-            low_press_value = min(pressing_a, pressing_b)
-
-            match_specific_recs.append({
-                'id': f'REC-PRESS-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'pressing',
-                'title': f'{low_press_team}: Adjust Pressing Strategy',
-                'description': f'{low_press_team} pressing intensity ({low_press_value:.1f}) is significantly lower than {high_press_team}. Consider more aggressive counter-pressing or deeper defensive block.',
-                'reasoning': f'Pressing differential of {press_diff:.1f} points creates tactical imbalance.',
-                'expected_outcome': 'Better control of space and reduced opponent time on ball',
-                'confidence_score': min(0.82, 0.65 + press_diff / 100),
-                'target_team': 'B' if pressing_a > pressing_b else 'A',
-                'actionable': True,
-                'risk_level': 'medium'
-            })
-
-        # Dynamic recommendation based on shot creation disparity
-        if total_shots > 0:
-            shot_ratio = max(shots_team_a, shots_team_b) / max(total_shots * 0.5, 1)
-            if shot_ratio > 0.7:
-                dominant_shots = team_a if shots_team_a > shots_team_b else team_b
-                trailing_shots = team_b if shots_team_a > shots_team_b else team_a
-
-                match_specific_recs.append({
-                    'id': f'REC-SHOTS-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'HIGH',
-                    'category': 'attacking',
-                    'title': f'{trailing_shots}: Create More Goal Threats',
-                    'description': f'{trailing_shots} is being outshot significantly. Need to improve final third entries and shot creation through wider attacking patterns.',
-                    'reasoning': f'Limited shot production indicates struggles in penetrating opponent defense.',
-                    'expected_outcome': 'Generate 2-3 additional shots per half',
-                    'confidence_score': 0.80,
-                    'target_team': 'B' if shots_team_a > shots_team_b else 'A',
-                    'actionable': True,
-                    'risk_level': 'medium'
-                })
-
-        # Dynamic recommendation based on pass accuracy patterns
-        team_passes = pass_data.get('team_passes', {})
-        team_a_pass_data = team_passes.get('A', {}) if isinstance(team_passes.get('A'), dict) else {'accuracy': 75}
-        team_b_pass_data = team_passes.get('B', {}) if isinstance(team_passes.get('B'), dict) else {'accuracy': 75}
-        pass_acc_a = team_a_pass_data.get('accuracy', 75) if isinstance(team_a_pass_data, dict) else 75
-        pass_acc_b = team_b_pass_data.get('accuracy', 75) if isinstance(team_b_pass_data, dict) else 75
-
-        if pass_acc_a < 70:
-            match_specific_recs.append({
-                'id': f'REC-PASS-A-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'passing',
-                'title': f'{team_a}: Improve Passing Accuracy',
-                'description': f'{team_a} pass accuracy is {pass_acc_a:.1f}%, below optimal. Focus on simpler passing options and better body positioning when receiving.',
-                'reasoning': f'Low pass accuracy creates turnovers and disrupts attacking rhythm.',
-                'expected_outcome': 'Increase pass accuracy to 75%+ and maintain longer possession sequences',
-                'confidence_score': 0.78,
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        if pass_acc_b < 70:
-            match_specific_recs.append({
-                'id': f'REC-PASS-B-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'passing',
-                'title': f'{team_b}: Improve Passing Accuracy',
-                'description': f'{team_b} pass accuracy is {pass_acc_b:.1f}%, below optimal. Focus on simpler passing options and better body positioning when receiving.',
-                'reasoning': f'Low pass accuracy creates turnovers and disrupts attacking rhythm.',
-                'expected_outcome': 'Increase pass accuracy to 75%+ and maintain longer possession sequences',
-                'confidence_score': 0.78,
-                'target_team': 'B',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Dynamic recommendation based on formation analysis
-        if formation_a != formation_b:
-            if '3-' in formation_a and '4-' in formation_b:
-                match_specific_recs.append({
-                    'id': f'REC-FORM-A-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'MEDIUM',
-                    'category': 'formation',
-                    'title': f'{team_a}: Exploit Wide Areas',
-                    'description': f'{team_a} is playing with 3 defenders vs {team_b}\'s 4. Use wing-backs to create overloads in wide positions.',
-                    'reasoning': f'3-back formation provides natural width advantages against 4-back systems.',
-                    'expected_outcome': 'Create 2v1 situations on the flanks and deliver dangerous crosses',
-                    'confidence_score': 0.82,
-                    'target_team': 'A',
-                    'actionable': True,
-                    'risk_level': 'low'
-                })
-            elif '4-' in formation_a and '3-' in formation_b:
-                match_specific_recs.append({
-                    'id': f'REC-FORM-B-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'MEDIUM',
-                    'category': 'formation',
-                    'title': f'{team_b}: Exploit Wide Areas',
-                    'description': f'{team_b} is playing with 3 defenders vs {team_a}\'s 4. Use wing-backs to create overloads in wide positions.',
-                    'reasoning': f'3-back formation provides natural width advantages against 4-back systems.',
-                    'expected_outcome': 'Create 2v1 situations on the flanks and deliver dangerous crosses',
-                    'confidence_score': 0.82,
-                    'target_team': 'B',
-                    'actionable': True,
-                    'risk_level': 'low'
-                })
-
-        # Dynamic recommendation based on offside patterns
-        if confirmed_offsides > 3:
-            match_specific_recs.append({
-                'id': f'REC-OFFSIDE-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'attacking',
-                'title': 'Adjust Timing of Runs',
-                'description': f'{confirmed_offsides} offsides recorded. Strikers need to hold their runs slightly longer to stay onside.',
-                'reasoning': f'High offside count indicates poor timing between passers and runners.',
-                'expected_outcome': 'Reduce offsides by 50% while maintaining attacking threat',
-                'confidence_score': 0.75,
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Dynamic recommendation based on physical metrics
-        if avg_speed_a > 0 and avg_speed_b > 0:
-            speed_diff = abs(avg_speed_a - avg_speed_b)
-            if speed_diff > 1.0:
-                faster_team = team_a if avg_speed_a > avg_speed_b else team_b
-                match_specific_recs.append({
-                    'id': f'REC-PHYS-{int(time.time())}',
-                    'timestamp': 0,
-                    'priority': 'LOW',
-                    'category': 'physical',
-                    'title': f'{faster_team}: Leverage Speed Advantage',
-                    'description': f'{faster_team} is showing higher average speed. Use quick transitions and direct running to exploit this advantage.',
-                    'reasoning': f'Speed differential of {speed_diff:.2f} m/s can be exploited in open play.',
-                    'expected_outcome': 'Create more chances through quick breaks and fast combinations',
-                    'confidence_score': 0.70,
-                    'target_team': 'A' if avg_speed_a > avg_speed_b else 'B',
-                    'actionable': True,
-                    'risk_level': 'low'
-                })
-
-        # Dynamic recommendation based on dribble success
-        if dribble_success < 40 and dribbles.get('total_dribbles', 0) > 5:
-            match_specific_recs.append({
-                'id': f'REC-DRIBBLE-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'MEDIUM',
-                'category': 'attacking',
-                'title': 'Reduce Risky Dribbles',
-                'description': f'Dribble success rate is only {dribble_success:.1f}%. Consider quicker passing combinations instead of individual runs.',
-                'reasoning': f'Low dribble success indicates poor decision-making in 1v1 situations.',
-                'expected_outcome': 'Increase possession retention and reduce turnovers in dangerous areas',
-                'confidence_score': 0.76,
-                'target_team': 'A',
-                'actionable': True,
-                'risk_level': 'low'
-            })
-
-        # Add match-specific recommendations to the list
-        ai_recommendations = match_specific_recs + ai_recommendations
-
-        # If still no recommendations, add a contextual default
-        if len(ai_recommendations) == 0:
-            ai_recommendations.append({
-                'id': f'REC-DEFAULT-{int(time.time())}',
-                'timestamp': 0,
-                'priority': 'INFO',
-                'category': 'general',
-                'title': 'Match Analysis In Progress',
-                'description': 'Continue monitoring match patterns. Recommendations will appear as more data is collected.',
-                'reasoning': 'Insufficient data for specific tactical recommendations at this time.',
-                'expected_outcome': 'More targeted recommendations as match develops',
-                'confidence_score': 0.50,
-                'target_team': 'A',
-                'actionable': False,
-                'risk_level': 'low'
-            })
-
-        # Filter and deduplicate
-        filtered_recs = []
-        seen_categories = set()
-        seen_titles = set()
-
-        for rec in ai_recommendations:
-            category = rec.get('category', 'General')
-            title = rec.get('title', '')
-            unique_key = f"{category}:{title}"
-
-            if unique_key in seen_titles:
-                continue
-            seen_titles.add(unique_key)
-
-            if category == 'opponent_exploit' and 'Attack' in title and 'zone' not in seen_categories:
-                seen_categories.add('zone')
-                if not any(r.get('title') == 'Exploit Multiple Weak Zones' for r in filtered_recs):
-                    filtered_recs.append({
-                        'id': 'REC-ZONE-SUMMARY',
-                        'timestamp': rec.get('timestamp', 0),
-                        'priority': 'MEDIUM',
-                        'category': 'opponent_exploit',
-                        'title': 'Exploit Multiple Weak Zones',
-                        'description': 'Opponent shows low control in several zones. Consider rotating attacks between different defensive and midfield areas.',
-                        'reasoning': 'Analysis shows opponent vulnerability across multiple zones.',
-                        'expected_outcome': 'Create high-quality chances by attacking under-defended areas',
-                        'confidence_score': 0.75,
-                        'target_team': rec.get('target_team', 'A'),
-                        'actionable': True,
-                        'risk_level': 'low'
-                    })
-            else:
-                filtered_recs.append(rec)
-
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">Total</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #f1f5f9;">{len(filtered_recs)}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">Total</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="card-container" style="text-align:center;padding:20px;">
+                <div style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">Recommendations</div>
+                <div style="font-size:2rem;font-weight:700;color:#f1f5f9;">{len(_recs)}</div>
+            </div>""", unsafe_allow_html=True)
         with col2:
-            high_priority = len([r for r in filtered_recs if r.get('priority') in ['CRITICAL', 'HIGH']])
             st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">High Priority</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #DA291C;">{high_priority}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">High Priority</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="card-container" style="text-align:center;padding:20px;">
+                <div style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">High Priority</div>
+                <div style="font-size:2rem;font-weight:700;color:#DA291C;">{_high}</div>
+            </div>""", unsafe_allow_html=True)
         with col3:
-            actionable = len([r for r in filtered_recs if r.get('actionable', True)])
             st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">Actionable</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #34d399;">{actionable}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">Actionable</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col4:
-            avg_confidence = np.mean([r.get('confidence_score', 0.5) for r in filtered_recs]) if filtered_recs else 0
-            st.markdown(f"""
-            <div class="card-container" style="text-align: center; padding: 20px;">
-                <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px;">Avg Confidence</div>
-                <div style="font-size: 2rem; font-weight: 700; color: #fbbf24;">{avg_confidence:.0%}</div>
-                <div style="color: #cbd5e1; font-size: 0.85rem;">Avg Confidence</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="card-container" style="text-align:center;padding:20px;">
+                <div style="font-size:0.9rem;color:#cbd5e1;margin-bottom:8px;">Avg Confidence</div>
+                <div style="font-size:2rem;font-weight:700;color:#fbbf24;">{_avg_cf:.0%}</div>
+            </div>""", unsafe_allow_html=True)
 
-        # Display Recommendations
-        st.markdown('<div style="height: 24px;"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Top Recommendations</div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
 
-        if filtered_recs:
-            priority_order = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'INFO': 1}
-            sorted_recs = sorted(filtered_recs, 
-                               key=lambda x: priority_order.get(x.get('priority', 'LOW'), 0), 
-                               reverse=True)
+        # ── Recommendation cards ─────────────────────────────────────────
+        _priority_color = {
+            "CRITICAL": "#fb7185",
+            "HIGH":     "#fbbf24",
+            "MEDIUM":   "#60a5fa",
+            "LOW":      "#34d399",
+        }
+        _category_icon = {
+            "attacking":      "⚽",
+            "defensive":      "🛡️",
+            "transitions":    "⚡",
+            "opponent_exploit": "🔍",
+            "formation":      "📐",
+            "physical":       "💪",
+            "possession":     "🔄",
+        }
 
-            for rec in sorted_recs[:10]:
-                priority = rec.get('priority', 'LOW')
-                category = rec.get('category', 'General')
-                title = rec.get('title', rec.get('recommendation', 'No title'))
-                description = rec.get('description', rec.get('issue', ''))
-                confidence = rec.get('confidence', rec.get('confidence_score', 0.5))
-                reasoning = rec.get('reasoning', '')
-                expected_outcome = rec.get('expected_outcome', '')
-
-                priority_colors = {
-                    'CRITICAL': '#fb7185',
-                    'HIGH': '#fbbf24',
-                    'MEDIUM': '#60a5fa',
-                    'LOW': '#34d399',
-                    'INFO': '#6b7280'
-                }
-                color = priority_colors.get(priority, '#6b7280')
-
+        if _recs:
+            for _r in _recs:
+                _color = _priority_color.get(_r.priority, "#6b7280")
+                _icon  = _category_icon.get(_r.category, "🎯")
+                _steps_html = "".join(
+                    f'<li style="margin-bottom:4px;color:#cbd5e1;">{s}</li>'
+                    for s in _r.action_steps
+                )
+                _stats_html = " &nbsp;|&nbsp; ".join(
+                    f'<span style="color:#94a3b8;">{k}:</span> '
+                    f'<span style="color:#f1f5f9;font-weight:600;">{v}</span>'
+                    for k, v in _r.stats_used.items()
+                )
                 st.markdown(f"""
-                <div class="recommendation-card" style="border-left-color: {color};">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                        <h4 style="margin: 0; color: #f1f5f9; font-size: 1.1rem;">{title}</h4>
-                        <span style="background: {color}; color: white; padding: 4px 14px; border-radius: 12px; font-size: 0.8rem; font-weight: 500;">
-                            {priority}
+                <div class="recommendation-card" style="border-left:4px solid {_color};margin-bottom:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                        <h4 style="margin:0;color:#f1f5f9;font-size:1.05rem;">{_icon} {_r.title}</h4>
+                        <span style="background:{_color};color:#0f172a;padding:3px 12px;border-radius:10px;
+                                     font-size:0.78rem;font-weight:700;white-space:nowrap;margin-left:12px;">
+                            {_r.priority}
                         </span>
                     </div>
-                    <p style="color: #cbd5e1; margin: 8px 0; line-height: 1.6;">{description}</p>
-                    {f'<p style="color: #a78bfa; margin: 6px 0; font-size: 0.9rem;"><strong>Reasoning:</strong> {reasoning}</p>' if reasoning else ''}
-                    {f'<p style="color: #34d399; margin: 6px 0; font-size: 0.9rem;"><strong>Expected Outcome:</strong> {expected_outcome}</p>' if expected_outcome else ''}
-                    <div style="display: flex; gap: 20px; margin-top: 12px; font-size: 0.85rem;">
-                        <span style="color: #a78bfa;">{category}</span>
-                        <span style="color: #34d399;">Confidence: {confidence:.0%}</span>
+                    <p style="color:#e2e8f0;margin:0 0 8px;line-height:1.65;">{_r.description}</p>
+                    <p style="color:#a78bfa;margin:0 0 10px;font-size:0.88rem;">
+                        <strong>Why:</strong> {_r.reasoning}
+                    </p>
+                    <details>
+                        <summary style="color:#38bdf8;cursor:pointer;font-size:0.88rem;
+                                        font-weight:600;margin-bottom:6px;">
+                            📋 Coaching instructions
+                        </summary>
+                        <ol style="margin:8px 0 0 16px;padding:0;">{_steps_html}</ol>
+                    </details>
+                    <div style="margin-top:10px;font-size:0.8rem;border-top:1px solid #1e293b;padding-top:8px;">
+                        {_stats_html}
+                        &nbsp;&nbsp;
+                        <span style="color:#34d399;">confidence {_r.confidence:.0%}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div class="empty-state">
-                <h3 style="color: #f1f5f9; margin-bottom: 8px;">No AI Recommendations</h3>
-                <p style="color: #cbd5e1;">Process a video through the analysis pipeline to generate tactical suggestions.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info("No significant patterns detected yet. Process a full match video to generate recommendations.")
 
     except Exception as e:
         _tab_error_boundary("AI Recommendations", e)
@@ -3406,12 +3322,18 @@ with tab13:
         if len(match_options) < 2:
             st.info("Need at least 2 processed matches for comparison. Run the pipeline on more videos first.")
         else:
+            # Use session_state so selection persists across reruns
+            default_matches = st.session_state.get('selected_matches') or list(match_options.keys())[:2]
             selected_matches = st.multiselect(
                 "Select matches to compare",
                 options=list(match_options.keys()),
-                default=list(match_options.keys())[:2],
-                max_selections=5
+                default=default_matches,
+                max_selections=5,
+                key='selected_matches_control'
             )
+
+            # Keep a copy in session_state for other tabs
+            st.session_state['selected_matches'] = selected_matches
 
             if len(selected_matches) < 2:
                 st.info("Select at least 2 matches to compare.")
@@ -3429,26 +3351,26 @@ with tab13:
 
                 table_rows = []
                 metric_defs = [
-                    ("Total Goals", lambda m: m.get('score', {}).get('A', 0) + m.get('score', {}).get('B', 0) if m.get('score') else m.get('xg_analysis', {}).get('actual_goals', 0)),
-                    ("Total Shots", lambda m: m.get('shot_detection', {}).get('total_shots', 0)),
-                    ("Shot Accuracy %", lambda m: f"{(m.get('shot_detection', {}).get('team_shots', {}).get('A', 0) + m.get('shot_detection', {}).get('team_shots', {}).get('B', 0)) and round(100 * m.get('xg_analysis', {}).get('conversion_rate', 0), 1) or 0}"),
-                    ("Total Passes", lambda m: m.get('pass_detection', {}).get('total_passes', 0)),
-                    ("Pass Completion %", lambda m: m.get('pass_detection', {}).get('pass_accuracy', 0)),
-                    ("Possession (Home)", lambda m: f"{m.get('possession', {}).get('team_possession_percentage', {}).get('A', 0):.1f}%"),
-                    ("Possession (Away)", lambda m: f"{m.get('possession', {}).get('team_possession_percentage', {}).get('B', 0):.1f}%"),
-                    ("Total Sprints", lambda m: m.get('sprint_detection', {}).get('total_sprints', 0)),
-                    ("xG Total", lambda m: m.get('xg_analysis', {}).get('total_xg', 0)),
-                    ("Formation (Home)", lambda m: m.get('tactical_analysis', {}).get('current_formations', {}).get('A', 'N/A')),
-                    ("Formation (Away)", lambda m: m.get('tactical_analysis', {}).get('current_formations', {}).get('B', 'N/A')),
-                    ("Duration (min)", lambda m: round(m.get('duration_minutes', 0), 1)),
+                    ("Total Goals", lambda m: _extract_total_goals(m)),
+                    ("Total Shots", lambda m: _extract_total_shots(m)),
+                    ("Shot Accuracy %", lambda m: (lambda mm: f"{round(100 * _safe_number(mm.get('xg_analysis', {}).get('conversion_rate')) ,1)}%" if mm.get('xg_analysis') else "N/A")(m)),
+                    ("Total Passes", lambda m: _extract_total_passes(m)),
+                    ("Pass Completion %", lambda m: (lambda mm: f"{_safe_number(mm.get('pass_detection', {}).get('pass_accuracy')):.1f}%" if mm.get('pass_detection') else "N/A")(m)),
+                    ("Possession (Home)", lambda m: (lambda mm: f"{_safe_number(mm.get('possession', {}).get('team_possession_percentage', {}).get('A')):.1f}%" if mm.get('possession') else "N/A")(m)),
+                    ("Possession (Away)", lambda m: (lambda mm: f"{_safe_number(mm.get('possession', {}).get('team_possession_percentage', {}).get('B')):.1f}%" if mm.get('possession') else "N/A")(m)),
+                    ("Total Sprints", lambda m: _safe_number(m.get('sprint_detection', {}).get('total_sprints'))),
+                    ("xG Total", lambda m: _extract_total_xg(m)),
+                    ("Formation (Home)", lambda m: (m.get('tactical_analysis', {}).get('current_formations', {}).get('A', 'N/A'))),
+                    ("Formation (Away)", lambda m: (m.get('tactical_analysis', {}).get('current_formations', {}).get('B', 'N/A'))),
+                    ("Duration (min)", lambda m: round(_safe_number(m.get('duration_minutes')), 1)),
                 ]
 
                 for metric_name, extractor in metric_defs:
                     row = {"Metric": metric_name}
                     for match_name in selected_matches:
                         try:
-                            val = extractor(comparison_data[match_name])
-                            row[match_name] = val if val is not None else "N/A"
+                            raw_val = extractor(comparison_data[match_name])
+                            row[match_name] = _format_comparison_value(raw_val)
                         except Exception:
                             row[match_name] = "N/A"
                     table_rows.append(row)
@@ -3461,7 +3383,7 @@ with tab13:
                 import plotly.graph_objects as go
                 from plotly.subplots import make_subplots
 
-                chart_colors = ["#DA291C", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa"]
+                chart_colors = PLOTLY_PALETTE
 
                 # Short labels for chart axes
                 short_labels = [name.replace(" vs ", "\nvs\n")[:20] for name in selected_matches]
@@ -3476,19 +3398,19 @@ with tab13:
                     shots_data.append(m.get('shot_detection', {}).get('total_shots', 0))
                     goals_data.append(m.get('xg_analysis', {}).get('actual_goals', 0))
 
-                fig_shots = go.Figure(data=[
-                    go.Bar(name='Shots', x=short_labels, y=shots_data,
-                           marker_color='#DA291C', marker_line_width=0),
-                    go.Bar(name='Goals', x=short_labels, y=goals_data,
-                           marker_color='#ff6b5a', marker_line_width=0)
-                ])
-                fig_shots.update_layout(**plotly_dark_layout(
-                    barmode='group',
-                    xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
-                    yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
-                    height=350
-                ))
-                st.plotly_chart(fig_shots, use_container_width=True)
+                with st.spinner("Rendering shots & goals chart..."):
+                    fig_shots = go.Figure()
+                    fig_shots.add_trace(go.Bar(name='Shots', x=short_labels, y=shots_data,
+                                               marker_color=chart_colors[0], marker_line_width=0))
+                    fig_shots.add_trace(go.Bar(name='Goals', x=short_labels, y=goals_data,
+                                               marker_color=chart_colors[1], marker_line_width=0))
+                    fig_shots.update_layout(**plotly_dark_layout(
+                        barmode='group',
+                        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
+                        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
+                        height=350
+                    ))
+                    st.plotly_chart(fig_shots, use_container_width=True)
 
                 # Grouped bar: Passes Completed vs Intercepted per match
                 st.markdown('<div class="section-header">Passing Comparison</div>', unsafe_allow_html=True)
@@ -3501,19 +3423,19 @@ with tab13:
                     completed_data.append(pd_stats.get('completed_passes', 0))
                     intercepted_data.append(pd_stats.get('intercepted_passes', 0))
 
-                fig_passes = go.Figure(data=[
-                    go.Bar(name='Completed', x=short_labels, y=completed_data,
-                           marker_color='#34d399', marker_line_width=0),
-                    go.Bar(name='Intercepted', x=short_labels, y=intercepted_data,
-                           marker_color='#fb7185', marker_line_width=0)
-                ])
-                fig_passes.update_layout(**plotly_dark_layout(
-                    barmode='group',
-                    xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
-                    yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
-                    height=350
-                ))
-                st.plotly_chart(fig_passes, use_container_width=True)
+                with st.spinner("Rendering passing comparison..."):
+                    fig_passes = go.Figure()
+                    fig_passes.add_trace(go.Bar(name='Completed', x=short_labels, y=completed_data,
+                                                 marker_color=chart_colors[2], marker_line_width=0))
+                    fig_passes.add_trace(go.Bar(name='Intercepted', x=short_labels, y=intercepted_data,
+                                                 marker_color=chart_colors[4], marker_line_width=0))
+                    fig_passes.update_layout(**plotly_dark_layout(
+                        barmode='group',
+                        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Match'),
+                        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='Count'),
+                        height=350
+                    ))
+                    st.plotly_chart(fig_passes, use_container_width=True)
 
                 # Radar chart: normalized key stats
                 st.markdown('<div class="section-header">Performance Radar</div>', unsafe_allow_html=True)
@@ -3585,6 +3507,423 @@ with tab13:
     except Exception as e:
         _tab_error_boundary("Match Comparison", e)
 
+# ============================================================
+# TAB 14: LIVE MATCH DATA (Owner: Ahmed Khaled — Member E)
+# ============================================================
+with tab14:
+    try:
+        from demo.dashboard_pages.live_match_data import render as render_live
+        render_live()
+    except Exception as e:
+        _tab_error_boundary("Live Match Data", e)
+
+# ============================================================
+# TAB 15: GENERATE REPORT (Owner: Youssef — Member F)
+# ============================================================
+with tab15:
+    try:
+        from demo.dashboard_pages.generate_report import render_generate_report
+        render_generate_report()
+    except Exception as e:
+        _tab_error_boundary("Generate Report", e)
+
+# ============================================================
+# TAB 16: ROSTER MANAGEMENT (Owner: Helal — Member C)
+# ============================================================
+
+with tab16:
+    try:
+        from services.dynamic_roster_manager import DynamicRosterManager
+        st.markdown(
+            '<div class="section-header" style="color: #cbd5e1 !important; font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #DA291C; display: flex; align-items: center; gap: 10px;">Roster Management</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<p style='color:#cbd5e1; margin-bottom:1.25rem;'>Create and edit teams, import roster JSON, assign squads to matches, and review all database rosters.</p>",
+            unsafe_allow_html=True,
+        )
+
+        db = get_db_manager()
+        db.initialize_database()
+        roster_mgr = DynamicRosterManager(Path(db.db_path))
+
+        teams_list = db.list_teams()
+        team_options = {f"{t['name']} (ID: {t['team_id']})": t["team_id"] for t in teams_list}
+        pos_options = ["", "GK", "DEF", "MID", "FWD"]
+
+        def _reload_team_df(team_id: int) -> pd.DataFrame:
+            players = db.get_players_by_team(team_id)
+            if not players:
+                return pd.DataFrame(columns=["DB id", "name", "jersey_number", "position"])
+            df = pd.DataFrame(players)
+            for col in ("player_id", "name", "jersey_number", "position"):
+                if col not in df.columns:
+                    df[col] = None
+            out = pd.DataFrame(
+                {
+                    "DB id": df["player_id"].apply(
+                        lambda x: "" if pd.isna(x) or x is None else str(int(x))
+                    ),
+                    "name": df["name"].fillna("").astype(str),
+                    "jersey_number": pd.to_numeric(df["jersey_number"], errors="coerce"),
+                    "position": df["position"].fillna("").astype(str),
+                }
+            )
+            for i in out.index:
+                p = str(out.at[i, "position"] or "").upper()
+                if p and p not in pos_options:
+                    out.at[i, "position"] = ""
+            return out
+
+        def _count_json_players(data: dict) -> int:
+            n = 0
+            for side in ("A", "B"):
+                n += len((data.get("teams") or {}).get(side, {}).get("players") or {})
+            return n
+
+        st.markdown("---")
+
+        # ----- SUB-SECTION A: Create / Edit Team -----
+        st.markdown("##### A. Create / Edit team")
+        c_new1, c_new2 = st.columns(2)
+        with c_new1:
+            ct_name = st.text_input("Team name", key="roster_ct_name", placeholder="e.g. Liverpool")
+            ct_short = st.text_input("Short name", key="roster_ct_short", placeholder="e.g. LIV")
+        with c_new2:
+            ct_prim = st.color_picker("Primary color", "#FFFFFF", key="roster_ct_prim")
+            ct_sec = st.color_picker("Secondary color", "#000000", key="roster_ct_sec")
+
+        if st.button("Create team", type="primary", key="roster_btn_create_team"):
+            if not (ct_name or "").strip():
+                st.error("Team name is required.")
+            else:
+                try:
+                    new_id = db.add_team(
+                        (ct_name or "").strip(),
+                        (ct_short or "").strip() or None,
+                        ct_prim,
+                        ct_sec,
+                    )
+                    st.success(f"Team created or matched existing: **{new_id}** — `{db.get_team(new_id)['name']}`")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Could not create team: {ex}")
+
+        st.caption("Edit an existing team and its squad below.")
+
+        if not team_options:
+            st.warning("Add a team first before editing players.")
+        else:
+            sel_edit_label = st.selectbox(
+                "Select team to edit",
+                options=list(team_options.keys()),
+                key="roster_edit_team_selectbox",
+            )
+            sel_edit_id = team_options[sel_edit_label]
+            df_key = f"roster_edit_df_{sel_edit_id}"
+            if (
+                st.session_state.get("roster_edit_selected_label") != sel_edit_label
+                or df_key not in st.session_state
+            ):
+                st.session_state["roster_edit_selected_label"] = sel_edit_label
+                st.session_state[df_key] = _reload_team_df(sel_edit_id)
+
+            st.session_state[df_key] = st.data_editor(
+                st.session_state[df_key],
+                column_config={
+                    "DB id": st.column_config.TextColumn(
+                        "DB id", disabled=True, help="Blank = new player (saved as insert)"
+                    ),
+                    "name": st.column_config.TextColumn("Name", required=True, max_chars=120),
+                    "jersey_number": st.column_config.NumberColumn(
+                        "Jersey #", min_value=0, max_value=99, step=1, format="%d"
+                    ),
+                    "position": st.column_config.SelectboxColumn(
+                        "Position", options=pos_options, required=False
+                    ),
+                },
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            b1, b2, b3 = st.columns([1, 1, 2])
+            with b1:
+                add_clicked = st.button("Add player", key="roster_add_row_btn")
+            with b2:
+                save_clicked = st.button("Save changes", type="primary", key="roster_save_players_btn")
+
+            if add_clicked:
+                df_cur = st.session_state[df_key].copy()
+                new_row = pd.DataFrame(
+                    [{"DB id": "", "name": "", "jersey_number": np.nan, "position": ""}]
+                )
+                st.session_state[df_key] = pd.concat([df_cur, new_row], ignore_index=True)
+                st.rerun()
+
+            if save_clicked:
+                try:
+                    df_save = st.session_state[df_key].copy()
+                    updated = 0
+                    created = 0
+                    for _, row in df_save.iterrows():
+                        nm = (str(row.get("name") or "")).strip()
+                        if not nm:
+                            continue
+                        jraw = row.get("jersey_number")
+                        if pd.isna(jraw) or jraw is None or int(float(jraw)) == 0:
+                            jn = None
+                        else:
+                            jn = int(float(jraw))
+                        pos = (str(row.get("position") or "")).strip() or None
+                        dbid = (str(row.get("DB id") or "")).strip()
+                        if not dbid:
+                            db.add_player(sel_edit_id, nm, jn, pos)
+                            created += 1
+                        else:
+                            db.update_player(int(dbid), name=nm, jersey_number=jn, position=pos)
+                            updated += 1
+                    st.success(f"Saved: **{created}** new player(s), **{updated}** updated.")
+                    st.session_state[df_key] = _reload_team_df(sel_edit_id)
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Save failed: {ex}")
+
+            with st.expander("Danger zone", expanded=False):
+                if st.button("Delete selected team", key="roster_delete_team_btn"):
+                    try:
+                        db.delete_team(sel_edit_id)
+                        st.warning("Team deleted.")
+                        st.session_state.pop(df_key, None)
+                        st.session_state.pop("roster_edit_selected_label", None)
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Delete failed: {ex}")
+
+        st.markdown("---")
+
+        # ----- SUB-SECTION B: Import from JSON -----
+        st.markdown("##### B. Import from JSON")
+        import_mode = st.radio(
+            "Source",
+            ["Upload a JSON file", "Path on disk (single file)", "Path to rosters directory (all .json)"],
+            horizontal=True,
+            key="roster_import_mode",
+        )
+        uploaded = None
+        path_single = ""
+        path_dir = ""
+        if import_mode == "Upload a JSON file":
+            uploaded = st.file_uploader("Roster JSON", type=["json"], key="roster_json_upload")
+        elif import_mode == "Path on disk (single file)":
+            path_single = st.text_input(
+                "Absolute or project-relative path to a roster `.json` file",
+                value="rosters/test.json",
+                key="roster_path_single",
+            )
+        else:
+            path_dir = st.text_input(
+                "Directory containing roster JSON files (e.g. `rosters`)",
+                value="rosters",
+                key="roster_path_dir",
+            )
+
+        if st.button("Import", type="primary", key="roster_import_btn"):
+            try:
+                if import_mode == "Upload a JSON file":
+                    if not uploaded:
+                        st.error("Choose a JSON file to upload.")
+                    else:
+                        raw = uploaded.getvalue()
+                        data = json.loads(raw.decode("utf-8"))
+                        declared = _count_json_players(data)
+                        tmp = Path(tempfile.gettempdir()) / "tactivision_roster_uploads"
+                        tmp.mkdir(parents=True, exist_ok=True)
+                        tpath = tmp / uploaded.name
+                        tpath.write_bytes(raw)
+                        res = roster_mgr.bulk_import_from_json(tpath)
+                        st.success(
+                            f"Import OK. JSON defines **{declared}** player entries. "
+                            f"Touched {res['teams_touched']} teams and {res['players_touched']} players."
+                        )
+                elif import_mode == "Path on disk (single file)":
+                    p = Path(path_single.strip())
+                    if not p.is_file():
+                        st.error(f"File not found: `{p}`")
+                    else:
+                        raw_txt = p.read_text(encoding="utf-8")
+                        roster_io_sentinel.track_json_file_read()
+                        data = json.loads(raw_txt)
+                        declared = _count_json_players(data)
+                        res = roster_mgr.bulk_import_from_json(p)
+                        st.success(
+                            f"Import OK from `{p.name}`. JSON defines **{declared}** player entries; "
+                            f"Touched {res['teams_touched']} teams and {res['players_touched']} players."
+                        )
+                else:
+                    d = Path(path_dir.strip())
+                    if not d.is_dir():
+                        st.error(f"Directory not found: `{d}`")
+                    else:
+                        added_t = 0
+                        added_p = 0
+                        for jf in d.glob("*.json"):
+                            try:
+                                res = roster_mgr.bulk_import_from_json(jf)
+                                added_t += res["teams_touched"]
+                                added_p += res["players_touched"]
+                            except Exception as ex:
+                                st.warning(f"Error importing {jf.name}: {ex}")
+                        st.success(f"Directory import finished. Net new teams touched: **{added_t}**, players: **{added_p}**. Expand **Current rosters** below to verify.")
+                        st.rerun()
+            except json.JSONDecodeError as ex:
+                st.error(f"Invalid JSON: {ex}")
+            except Exception as ex:
+                st.error(f"Import error: {ex}")
+
+        st.markdown("---")
+
+        # ----- SUB-SECTION C: Assign roster to match -----
+        st.markdown("##### C. Assign roster to match")
+        matches = db.get_all_matches(limit=500) or []
+        match_labels = []
+        match_id_by_label = {}
+        for m in matches:
+            mid = m.get("match_id")
+            ta = m.get("team_a") or "?"
+            tb = m.get("team_b") or "?"
+            vid = m.get("video_path") or ""
+            label = f"#{mid}: {ta} vs {tb}"
+            if vid:
+                label += f" — {Path(str(vid)).name}"
+            match_labels.append(label)
+            match_id_by_label[label] = mid
+
+        if not match_labels or not team_options:
+            st.info("Need at least one match and one team in the database to assign rosters.")
+        else:
+            pick_m = st.selectbox("Match", options=match_labels, key="roster_assign_match")
+            mid_int = match_id_by_label[pick_m]
+            mid_str = str(mid_int)
+
+            cur = db.get_match_roster(mid_str)
+            if cur:
+                hn = (cur.get("home_team") or {}).get("name", "?")
+                an = (cur.get("away_team") or {}).get("name", "?")
+                st.info(f"Current assignment for match **{mid_str}**: **{hn}** (home, id {cur.get('home_team_id')}) vs **{an}** (away, id {cur.get('away_team_id')}).")
+            else:
+                st.caption(f"No roster assignment stored yet for match id `{mid_str}`.")
+
+            keys = list(team_options.keys())
+            h_idx = 0
+            a_idx = min(1, len(keys) - 1) if len(keys) > 1 else 0
+            col_h, col_a = st.columns(2)
+            with col_h:
+                h_pick = st.selectbox("Home team", options=keys, index=h_idx, key="roster_assign_home")
+            with col_a:
+                a_pick = st.selectbox("Away team", options=keys, index=a_idx, key="roster_assign_away")
+
+            if st.button("Assign roster", type="primary", key="roster_assign_btn"):
+                if h_pick == a_pick:
+                    st.error("Home and away must be different teams.")
+                else:
+                    try:
+                        db.assign_roster_to_match(mid_str, team_options[h_pick], team_options[a_pick])
+                        st.success(f"Roster assigned to match **{mid_str}**.")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Assignment failed: {ex}")
+
+        st.markdown("---")
+        st.markdown("##### C2 lineup preview (dynamic schema)")
+        st.caption(
+            f"Session roster JSON **disk** reads (sentinel): **{roster_io_sentinel.json_file_read_count}**. "
+            "This section loads **only** `lineup_teams` / `lineup_players` via `DynamicRosterManager` — no `rosters/*.json` read."
+        )
+        try:
+            _drm = DynamicRosterManager(Path(db.db_path))
+            lt = _drm.list_teams()
+            if not lt:
+                st.info("No C2 lineup data yet. Run `python migrations/001_dynamic_rosters.py` or `python scripts/seed_dynamic_rosters.py`.")
+            else:
+                from dataclasses import asdict
+
+                id_order = [t.id for t in lt]
+                id_to = {t.id: t for t in lt}
+                c2a, c2b = st.columns(2)
+                with c2a:
+                    tid_a = st.selectbox(
+                        "Team A",
+                        options=id_order,
+                        format_func=lambda i: f"{id_to[i].name} (id {i})",
+                        key="c2_preview_team_a",
+                    )
+                with c2b:
+                    idx_b = min(1, len(id_order) - 1) if len(id_order) > 1 else 0
+                    tid_b = st.selectbox(
+                        "Team B",
+                        options=id_order,
+                        index=idx_b,
+                        format_func=lambda i: f"{id_to[i].name} (id {i})",
+                        key="c2_preview_team_b",
+                    )
+                pa = _drm.list_players(tid_a)
+                pb = _drm.list_players(tid_b)
+                c2a.dataframe(
+                    pd.DataFrame([asdict(p) for p in pa]) if pa else pd.DataFrame(),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(280, 40 + len(pa) * 28),
+                )
+                c2b.dataframe(
+                    pd.DataFrame([asdict(p) for p in pb]) if pb else pd.DataFrame(),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(280, 40 + len(pb) * 28),
+                )
+        except Exception as ex:
+            st.warning(f"C2 preview unavailable: {ex}")
+
+        st.markdown("---")
+        st.markdown("#### Current rosters")
+        _, rr2 = st.columns([4, 1])
+        with rr2:
+            if st.button("Refresh view", use_container_width=True, key="roster_mgmt_refresh"):
+                for k in list(st.session_state.keys()):
+                    if k.startswith("roster_edit_df_"):
+                        del st.session_state[k]
+                if "roster_edit_selected_label" in st.session_state:
+                    del st.session_state["roster_edit_selected_label"]
+                st.rerun()
+
+        teams_list = db.list_teams()
+        if not teams_list:
+            st.info("No teams in the database yet. Create a team above or import a JSON roster.")
+        else:
+            for t in sorted(teams_list, key=lambda x: x.get("name") or ""):
+                tid = t["team_id"]
+                pname = t.get("primary_color") or "#FFFFFF"
+                sname = t.get("secondary_color") or "#000000"
+                sq = (
+                    f"<span style='display:inline-block;width:14px;height:14px;background:{pname};"
+                    f"border-radius:3px;border:1px solid rgba(255,255,255,0.25);margin-right:6px;vertical-align:middle;'></span>"
+                    f"<span style='display:inline-block;width:14px;height:14px;background:{sname};"
+                    f"border-radius:3px;border:1px solid rgba(255,255,255,0.25);margin-right:10px;vertical-align:middle;'></span>"
+                )
+                short = t.get("short_name") or "—"
+                with st.expander(f"{sq} **{t.get('name', 'Team')}** (ID {tid}, short: {short})", expanded=False):
+                    tpl = db.get_players_by_team(tid)
+                    if tpl:
+                        st.dataframe(
+                            pd.DataFrame(tpl),
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(320, 40 + len(tpl) * 36),
+                        )
+                    else:
+                        st.caption("No players on this team yet.")
+
+    except Exception as e:
+        _tab_error_boundary("Roster Management", e)
 # ============================================================
 # FOOTER
 # ============================================================

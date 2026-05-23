@@ -97,6 +97,12 @@ class OffsideDetector:
         self._last_ball_velocity: float = 0.0
         self._ball_played_frame: Optional[int] = None
 
+        # Offside-offence de-duplication. A single offside offence spans many
+        # frames; without a cooldown the same offence is re-confirmed every
+        # frame, which inflated the count into the hundreds.
+        self._last_confirmed_offside_frame: int = -10000
+        self.offside_cooldown_frames: int = 90  # ~3.5s at the processed frame rate
+
     def update_player_positions(
         self,
         player_positions: Dict[int, Tuple[float, float, str]],
@@ -244,6 +250,12 @@ class OffsideDetector:
 
                     self._potential_offsides.append(potential)
 
+        # Keep the list bounded. update_ball_state() only looks back ~30
+        # frames, so older records are dead weight — and a full-match run
+        # would otherwise accumulate hundreds of thousands of entries.
+        if len(self._potential_offsides) > 600:
+            del self._potential_offsides[:-600]
+
     def update_ball_state(
         self,
         ball_position: Tuple[float, float],
@@ -272,11 +284,18 @@ class OffsideDetector:
         if not ball_played:
             return None
 
+        # De-dup: one offside offence spans many frames. Only count one
+        # offence per cooldown window.
+        if frame_idx - self._last_confirmed_offside_frame < self.offside_cooldown_frames:
+            return None
+
         # Check if ball was played to an offside player
         for potential in reversed(self._potential_offsides):
-            # Only check recent potential offsides (within last second)
+            # reversed() => newest first; once we hit one older than the
+            # window every remaining record is older too, so stop (break,
+            # not continue — continue made this O(n) per frame -> O(n^2)).
             if frame_idx - potential.frame_idx > 30:
-                continue
+                break
 
             # Check if ball is near the offside player
             for player_id, (x, y, team) in self._player_positions.items():
@@ -293,6 +312,7 @@ class OffsideDetector:
                 if distance < 50:  # Within 50 pixels
                     potential.ball_played = True
                     potential.confirmed_offside = True
+                    self._last_confirmed_offside_frame = frame_idx
 
                     offside_event = {
                         'type': 'offside',
@@ -383,7 +403,9 @@ class OffsideDetector:
     def get_statistics(self) -> Dict[str, Any]:
         """Get offside detection statistics."""
         total_potential = len(self._potential_offsides)
-        confirmed = len([o for o in self._potential_offsides if o.confirmed_offside])
+        # Count actual offside OFFENCES (discrete, de-duplicated events),
+        # not per-frame offside positions.
+        confirmed = len(self._confirmed_offsides)
 
         # By team
         team_a_potential = len([o for o in self._potential_offsides if o.attacking_team == 'A'])
@@ -407,3 +429,4 @@ class OffsideDetector:
         self._last_ball_position = None
         self._last_ball_velocity = 0.0
         self._ball_played_frame = None
+        self._last_confirmed_offside_frame = -10000

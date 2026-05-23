@@ -49,6 +49,7 @@ class MatchData:
     lineups: Dict = field(default_factory=dict)
     statistics: Dict = field(default_factory=dict)
     source: str = ""
+    matchday: Optional[int] = None
 
 
 class BaseAPIConnector(ABC):
@@ -487,7 +488,7 @@ class FootballDataConnector(BaseAPIConnector):
         else:
             endpoint = "matches"
             
-        cache_key = f"football_data_matches_{competition_id}_{date_from}_{date_to}"
+        cache_key = f"football_data_matches_{competition_id}_{date_from}_{date_to}_{matchday}"
         cached = self._get_cached(cache_key)
         if cached:
             return cached
@@ -506,13 +507,32 @@ class FootballDataConnector(BaseAPIConnector):
                     away_team=match.get('awayTeam', {}).get('name', ''),
                     home_score=match.get('score', {}).get('fullTime', {}).get('home', 0),
                     away_score=match.get('score', {}).get('fullTime', {}).get('away', 0),
-                    source="Football-data.org"
+                    source="Football-data.org",
+                    matchday=match.get('matchday'),
                 )
                 matches.append(match_data)
-                
+
         self._set_cached(cache_key, matches)
         return matches
-        
+
+    def get_current_matchday(self, competition_id: str) -> Optional[int]:
+        """
+        Return the current (or most recently played) matchday for a competition.
+        Uses the competition endpoint which returns season.currentMatchday.
+        """
+        cache_key = f"football_data_current_matchday_{competition_id}"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        data = self._make_request(f"competitions/{competition_id}")
+        if data and "currentSeason" in data:
+            md = data["currentSeason"].get("currentMatchday")
+            if md:
+                self._set_cached(cache_key, md)
+                return md
+        return None
+
     def get_match_events(self, match_id: str) -> List[Dict]:
         """Fetch match events (limited in free tier)."""
         data = self._make_request(f"matches/{match_id}")
@@ -658,6 +678,14 @@ class FootballDataConnector(BaseAPIConnector):
         self._set_disk_cached(squad_label, squad)
         logger.info("Fetched %d players for %s (ID %s)", len(squad), data.get("name", ""), team_id)
         return squad
+
+    def fetch_team_squad(self, external_id: int) -> List[Dict]:
+        """
+        Squad by football-data.org team id (C2 / Member E sync hook).
+
+        Delegates to :meth:`fetch_squad` which already resolves ``teams/{id}``.
+        """
+        return self.fetch_squad(external_id)
 
     def fetch_and_save_squad(self, team_name: str, db_manager) -> List[Dict]:
         """

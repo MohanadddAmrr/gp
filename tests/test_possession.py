@@ -36,18 +36,15 @@ def test_possession_detection():
     
     result = tracker.detect_possession(ball_pos, players, frame_idx=1, timestamp=0.04)
     
-    if result:
-        player_id, team, distance = result
-        print(f"  Ball position: {ball_pos}")
-        print(f"  Player {player_id} (Team {team}) has possession")
-        print(f"  Distance: {distance:.2f} pixels")
-        assert player_id == 7, f"Expected player 7, got {player_id}"
-        assert team == 'A', f"Expected team A, got {team}"
-        assert distance < 50, f"Distance should be < 50px, got {distance:.2f}"
-        print("  ✅ PASS: Possession correctly assigned to closest player")
-    else:
-        print("  ❌ FAIL: No possession detected")
-        return False
+    assert result is not None, "No possession detected"
+    player_id, team, distance = result
+    print(f"  Ball position: {ball_pos}")
+    print(f"  Player {player_id} (Team {team}) has possession")
+    print(f"  Distance: {distance:.2f} pixels")
+    assert player_id == 7, f"Expected player 7, got {player_id}"
+    assert team == 'A', f"Expected team A, got {team}"
+    assert distance < 50, f"Distance should be < 50px, got {distance:.2f}"
+    print("  ✅ PASS: Possession correctly assigned to closest player")
 
     print("\n✓ Test 2: All Players Too Far (No Possession)")
     print("-" * 70)
@@ -62,14 +59,11 @@ def test_possession_detection():
     
     result = tracker.detect_possession(ball_pos, players, frame_idx=2, timestamp=0.08)
     
-    if result is None:
-        print(f"  Ball position: {ball_pos}")
-        print(f"  All players outside threshold (>50px)")
-        print(f"  No possession detected")
-        print("  ✅ PASS: Correctly detected loose ball")
-    else:
-        print(f"  ❌ FAIL: Incorrectly assigned possession to player {result[0]}")
-        return False
+    assert result is None, f"Incorrectly assigned possession to player {result[0] if result else None}"
+    print(f"  Ball position: {ball_pos}")
+    print(f"  All players outside threshold (>50px)")
+    print(f"  No possession detected")
+    print("  ✅ PASS: Correctly detected loose ball")
 
     print("\n✓ Test 3: Possession Change Detection")
     print("-" * 70)
@@ -87,14 +81,11 @@ def test_possession_detection():
     history = tracker.get_possession_history()
     print(f"  Possession changes detected: {len(history)}")
     
-    if len(history) >= 1:
-        last_event = history[-1]
-        print(f"  Last possession: Player {last_event['player_id']} (Team {last_event['team']})")
-        print(f"  Duration: {last_event['duration']:.3f} seconds")
-        print("  ✅ PASS: Possession change logged correctly")
-    else:
-        print("  ❌ FAIL: No possession history recorded")
-        return False
+    assert len(history) >= 1, "No possession history recorded"
+    last_event = history[-1]
+    print(f"  Last possession: Player {last_event['player_id']} (Team {last_event['team']})")
+    print(f"  Duration: {last_event['duration']:.3f} seconds")
+    print("  ✅ PASS: Possession change logged correctly")
 
     print("\n✓ Test 4: Possession Statistics")
     print("-" * 70)
@@ -137,8 +128,6 @@ def test_possession_detection():
     print("✅ Possession history tracking")
     print("\nReady for integration with video processing!")
     print("=" * 70)
-    
-    return True
 
 
 if __name__ == "__main__":

@@ -92,6 +92,25 @@ def _load_tracking_config() -> dict:
     return cfg.get("detection", {}).get("tracking", {}) or {}
 
 
+def _load_ball_second_pass_config() -> dict:
+    """Read the ball_tracking.second_pass section from config.yaml (P15).
+
+    Returns an empty dict on any failure so the caller falls back to the
+    default of a disabled second pass without crashing the demo.
+    """
+    if _yaml is None:
+        return {}
+    cfg_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    if not cfg_path.exists():
+        return {}
+    try:
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            cfg = _yaml.safe_load(fh) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+    return cfg.get("ball_tracking", {}).get("second_pass", {}) or {}
+
+
 def _load_tracker_algorithm(default: str = "bytetrack") -> str:
     """Read detection.tracking.algorithm from config.yaml.
 
@@ -183,9 +202,17 @@ def make_colored_heatmap(hm: np.ndarray, out_path: Path):
     
     # Normalize heatmap
     norm = (hm / hm.max() * 255).astype(np.uint8)
-    
+
     # Apply Gaussian blur for smoother, more professional look
-    norm_smooth = cv2.GaussianBlur(norm, (21, 21), 0)
+    norm_smooth = cv2.GaussianBlur(norm, (51, 51), 0)
+    # Re-normalize AFTER blur. Without this, blurring a sparse heatmap
+    # collapses peak values to <40 so the alpha-blend below makes the
+    # overlay nearly invisible against the green pitch — every demo
+    # heatmap rendered as a blank green field before this fix.
+    if norm_smooth.max() > 0:
+        norm_smooth = (
+            norm_smooth.astype(np.float32) / float(norm_smooth.max()) * 255.0
+        ).astype(np.uint8)
     
     # Create custom color map (blue -> cyan -> green -> yellow -> red)
     # This matches professional heatmap visualizations
@@ -440,7 +467,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
                  enable_social: bool = False,
                  chunk_size_minutes: float = 0, memory_limit_percent: float = 80,
                  team_a_name: str = None, team_b_name: str = None,
-                 max_seconds: float = 0, tracker=None,
+                 max_seconds: float = 0, start_seconds: float = 0, tracker=None,
                  reid_layer=None, reid_classifier=None):
     """Process a single video file with optional integration features.
 
@@ -521,9 +548,9 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     ball_tracker = BallTracker()
     possession_tracker = PossessionTracker(distance_threshold=60.0)
     event_detector = EventDetector(
-        min_velocity_mps=1.5,  # Lower threshold for more pass detection
-        min_distance_m=3.0,    # Lower minimum distance
-        max_distance_m=60.0,   # Higher max distance
+        min_velocity_mps=4.0,  # A real pass is struck with intent
+        min_distance_m=5.0,    # Below 5m is closer to a touch than a pass
+        max_distance_m=60.0,   # Allow long balls
     )
     sprint_detector = SprintDetector()
     tactical_analyzer = TacticalAnalyzer(
@@ -555,15 +582,22 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     _resolved_ta = team_a_name
     _resolved_tb = team_b_name
 
-    # Load team colors from config for any resolved team
+    # Load team colors from config for any resolved team.
+    # NOTE: ROOT is redefined at module-level to `demo/` (line ~165), so
+    # `ROOT / "config.yaml"` resolves to `demo/config.yaml` which doesn't
+    # exist — the bare `except` was silently swallowing the FileNotFoundError
+    # and leaving _team_colors_cfg empty. Use the project root explicitly.
     import yaml as _yaml
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
     _team_colors_cfg = {}
     try:
-        with open(ROOT / "config.yaml", "r", encoding="utf-8") as _cf:
+        with open(_PROJECT_ROOT / "config.yaml", "r", encoding="utf-8") as _cf:
             _cfg = _yaml.safe_load(_cf)
-        _team_colors_cfg = _cfg.get("team_colors", {})
-    except Exception:
-        pass
+        _team_colors_cfg = _cfg.get("team_colors", {}) or {}
+    except FileNotFoundError:
+        print(f"[!] config.yaml not found at {_PROJECT_ROOT / 'config.yaml'}; team colors disabled")
+    except Exception as _exc:
+        print(f"[!] Failed to read config.yaml: {_exc}; team colors disabled")
 
     # Path 1: Explicit team names
     if db_manager and _resolved_ta and _resolved_tb:
@@ -651,7 +685,24 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
 
     # Color ball detector
     color_ball_detector = ColorBallDetector()
-    
+
+    # P15 — RT-DETR ball-only second pass (config-gated, off by default).
+    _ball_sp_cfg = _load_ball_second_pass_config()
+    rtdetr_ball_detector = None
+    ball_second_pass_max_jump = float(_ball_sp_cfg.get("max_jump_px", 300.0))
+    if bool(_ball_sp_cfg.get("enabled", False)):
+        from services.rtdetr_ball_detector import RTDetrBallDetector
+
+        rtdetr_ball_detector = RTDetrBallDetector(
+            weights_path=ROOT.parent / _ball_sp_cfg.get("weights", "weights/rtdetr-l.pt"),
+            conf=float(_ball_sp_cfg.get("confidence_threshold", 0.25)),
+            crop_size=int(_ball_sp_cfg.get("crop_size", 640)),
+        )
+        print("Ball second pass: enabled (RT-DETR, runs only when YOLO misses the ball)")
+    else:
+        print("Ball second pass: disabled")
+
+
     # Scaling: assume pitch is 105m long
     meter_per_px = 105.0 / width
     
@@ -664,6 +715,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     yolo_detections = 0
     color_detections = 0
     predicted_detections = 0
+    rtdetr_ball_detections = 0
     speed_capped_count = 0
     
     # Team assignment tracking
@@ -673,8 +725,14 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     
     # ── Chunked video processing setup ──────────────────────────
     _tmp_cap = cv2.VideoCapture(str(video_path))
-    total_frames = int(_tmp_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    video_total_frames = int(_tmp_cap.get(cv2.CAP_PROP_FRAME_COUNT))
     _tmp_cap.release()
+    # Optional seek: process from `start_seconds` into the source video.
+    start_frame_offset = int(max(start_seconds, 0) * fps)
+    start_frame_offset = min(start_frame_offset, max(video_total_frames - 1, 0))
+    if start_frame_offset > 0:
+        print(f"  Starting offset: {start_seconds:.1f}s -> frame {start_frame_offset}")
+    total_frames = video_total_frames - start_frame_offset
     if max_seconds > 0:
         max_frames = int(max_seconds * fps)
         total_frames = min(total_frames, max_frames)
@@ -684,7 +742,8 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
         chunk_frames = total_frames
 
     num_chunks = max(1, (total_frames + chunk_frames - 1) // chunk_frames)
-    chunk_state = {"raw_id_offset": 0, "chunk_idx": 0}
+    chunk_state = {"raw_id_offset": 0, "chunk_idx": 0,
+                   "start_frame_offset": start_frame_offset}
 
     def _chunked_frame_generator():
         """Yield YOLO Results objects, processing video in chunks to keep memory flat."""
@@ -710,10 +769,13 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
             else:
                 ending_positions = {}
 
-            # Open video, seek to start of this chunk
+            # Open video, seek to start of this chunk. Add start_frame_offset
+            # so chunk-relative frame indices map to absolute frames in the
+            # source video when --start-seconds is in effect.
             chunk_cap = cv2.VideoCapture(str(video_path))
-            if start_frame > 0:
-                chunk_cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            absolute_start = start_frame + chunk_state["start_frame_offset"]
+            if absolute_start > 0:
+                chunk_cap.set(cv2.CAP_PROP_POS_FRAMES, absolute_start)
 
             # Reset YOLO tracker state between chunks so ByteTrack starts fresh
             if chunk_idx > 0 and hasattr(model, 'predictor') and model.predictor is not None:
@@ -942,7 +1004,18 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
         
         # Ball detection fallback (skip color detection to conserve memory)
         # Uses only YOLO ball detection + Kalman prediction
-        
+
+        # P15 — RT-DETR ball-only second pass. Invoked only on frames where
+        # the primary YOLO detector missed the ball, before falling back to
+        # trajectory prediction.
+        if ball_box is None and rtdetr_ball_detector is not None:
+            second_box = rtdetr_ball_detector.detect_best(
+                frame, last_known_ball_pos, max_jump_px=ball_second_pass_max_jump
+            )
+            if second_box is not None:
+                ball_box = second_box
+                rtdetr_ball_detections += 1
+
         # Periodic memory cleanup every 50 frames to prevent memory buildup
         if frame_idx % 50 == 0:
             gc.collect()
@@ -1421,6 +1494,7 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
             "max_velocity_px_s": float(np.max(ball_velocities)) if ball_velocities else 0.0,
             "yolo_detections": yolo_detections,
             "color_detections": color_detections,
+            "rtdetr_second_pass_detections": rtdetr_ball_detections,
             "predicted_detections": predicted_detections,
             "position_history": ball_position_history[-500:]
         },
@@ -1594,7 +1668,8 @@ def process_video(video_path: Path, model, db_manager: DatabaseManager = None,
     print(f"  Match Duration: {match_duration_minutes:.1f} minutes")
     print(f"  Players: {canonical_player_count} canonical ({raw_track_count} raw YOLO tracks)")
     print(f"  Ball detections: {len(ball_position_history)}/{frame_idx} frames ({len(ball_position_history)/frame_idx*100:.1f}%)")
-    print(f"    - YOLO: {yolo_detections}, Color: {color_detections}, Predicted: {predicted_detections}")
+    print(f"    - YOLO: {yolo_detections}, Color: {color_detections}, "
+          f"RT-DETR 2nd-pass: {rtdetr_ball_detections}, Predicted: {predicted_detections}")
     print(f"  Possession - Team A: {possession_percentage['A']:.1f}%, Team B: {possession_percentage['B']:.1f}%")
     print(f"  Passes: {pass_stats['total_passes']} ({pass_stats['completed_passes']} completed)")
     print(f"  Shots: {shot_stats['total_shots']}")
@@ -1678,6 +1753,10 @@ def main():
                         help='Chunk size in minutes for long video processing (0 = no chunking)')
     parser.add_argument('--memory-limit', type=float, default=80.0,
                         help='Warn if memory usage exceeds this %% of system RAM')
+    parser.add_argument('--max-seconds', type=float, default=0,
+                        help='Process only the first N seconds of the video (0 = whole video)')
+    parser.add_argument('--start-seconds', type=float, default=0,
+                        help='Seek into the video and start processing at this offset')
 
     args = parser.parse_args()
     
@@ -1765,6 +1844,8 @@ def main():
             enable_social=args.social,
             chunk_size_minutes=args.chunk_size,
             memory_limit_percent=args.memory_limit,
+            max_seconds=args.max_seconds,
+            start_seconds=args.start_seconds,
             tracker=tracker,
             reid_layer=reid_layer,
             reid_classifier=reid_classifier,
